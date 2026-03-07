@@ -1,0 +1,10 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+dbus-daemon           https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-daemon
+dbus-send             https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-send
+dbus-monitor          https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-monitor
+dbus-launch           https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-launch
+dbus-run-session      https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-run-session
+dbus-cleanup-sockets  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-cleanup-sockets
+dbus-uuidgen          https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/dbus-uuidgen
+libdbus-1.so.3        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/lib/libdbus-1.so.3

@@ -1,0 +1,10 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+firmware_upgrade  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/firmware_upgrade
+fx-usb-switch     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/fx-usb-switch
+fx-vbatt          https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/fx-vbatt
+fx_shutdown       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/fx_shutdown
+fxpollinkey       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/fxpollinkey
+pmm               https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/pmm
+wifi_cal_bin      https://github.com/ExtendedFi/JMR540_system_dump/blob/main/sbin/wifi_cal_bin
+wifi_nv_mac       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/sbin/wifi_nv_mac

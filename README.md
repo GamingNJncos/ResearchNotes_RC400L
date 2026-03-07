@@ -76,6 +76,10 @@ The device has plenty of options for external antennas but ships with compressio
 
 There's also what appears to be an unused RGB LED header. No idea if this is wired up in firmware or just a floating PCB pad. Filed away as "interesting, return to later."
 
+![](assets/image27.png)
+![](assets/image37.png)
+![](assets/image52.png)
+
 ---
 
 ## Step 2 — Digging Through Rayhunter's Codebase
@@ -96,6 +100,8 @@ rootshell
 
 This is actually a quality-of-life win. The rootshell binary is a proper bash shell with color support — a real shell as god intended, not some stripped busybox `sh`. This distinction matters when you're doing complex one-liners later.
 
+![](assets/image33.png)
+
 The high-level of what the Rayhunter installer does:
 - Changes USB mode from stock using a special USB control query
 - Enables ADB
@@ -112,13 +118,20 @@ Let's actually trace through the install process instead of treating it as a bla
 
 **[install-linux.sh](https://github.com/EFForg/rayhunter/blob/main/dist/install-linux.sh)** calls a binary called `serial` from the downloaded package.
 
+![](assets/image12.png)
+
 **[install-common.sh](https://github.com/EFForg/rayhunter/blob/main/dist/install-common.sh)** is where the actual orchestration happens. The sequence is roughly:
 
 1. Call `serial --root` to get elevated access to the device shell
 2. Use `adb push` to copy `rootshell` and set its permissions
 3. Rayhunter's web UI is served via a simple `adb forward`
 
+![](assets/image41.png)
+![](assets/image48.png)
+
 The `wait_for_atfwd_daemon` call at the end of the install script is notable — it implies the installer is *waiting* for a specific daemon to come up before proceeding. That daemon name is a clue. More on that in a moment.
+
+![](assets/image8.png)
 
 ---
 
@@ -128,7 +141,11 @@ The `wait_for_atfwd_daemon` call at the end of the install script is notable —
 
 The `serial` binary accepts either a command string or `--root`. There's a key line in there: it sends an AT command.
 
+![](assets/image5.png)
+
 That's what we want. But initially there's no indication of the exact format or what AT commands are supported.
+
+![](assets/image16.png)
 
 Working backwards from `install-common.sh`, the `--root` flag resolves to something like:
 
@@ -138,7 +155,11 @@ serial "AT+SYSCMD=<shell command here>"
 
 It's just wrapping AT+SYSCMD and stuffing a shell command into it. The "serial" mystery was a function wrapper around a single AT command. That's it.
 
+![](assets/image25.png)
+
 **Sidebar on Mac:** There's a frustrating platform-specific note buried in the Rust source — something that will bite Mac users. I'm on Windows/Linux, so I dodged this, but it's worth flagging for anyone following along on macOS. The serial port enumeration behaves differently and the install script has workarounds that aren't always obvious.
+
+![](assets/image40.png)
 
 **Manual AT+SYSCMD demo:**
 
@@ -150,6 +171,8 @@ Once you understand what `serial` is doing, you can replicate it manually:
 # Returns: OK (the command ran but output isn't echoed back over USB)
 ```
 
+![](assets/image44.png)
+
 This leads to the first real frustration: AT+SYSCMD executes commands but you don't get stdout back in the AT response. You only get `OK` or an error. Output is written elsewhere — specifically to `/data/logs/atfwd.log`.
 
 **What atfwd.log gives you:**
@@ -159,12 +182,16 @@ Nov 19 22:48:44 mdm9607 local3.info ATFWD[1069]: Registered AT Commands event ha
 Nov 19 22:48:44 mdm9607 local3.info ATFWD[1069]: Waiting for ctrCond
 ```
 
+![](assets/image15.png)
+
 Grepping that log for `+SYSCMD` reveals the exact commands the Rayhunter installer ran — which is both useful for understanding what happened and useful as a debugging channel when you're running your own commands and can't trust the terminal output.
 
 **Summary of what AT+SYSCMD gives us:**
 - A way to send shell commands with elevated permissions via USB serial (before ADB is up)
 - A binary (`serial`) and AT mode to do it
 - `atfwd.log` as the only reliable debug channel for those commands
+
+![](assets/image35.png)
 
 ---
 
@@ -176,6 +203,8 @@ Basic search pattern:
 ```bash
 find / -name "*.sh" 2>/dev/null
 ```
+
+![](assets/image11.png)
 
 One result that jumped out immediately: `DEBUG.sh`
 
@@ -189,9 +218,13 @@ While searching for RC400L rooting info I found an XDA thread that didn't initia
 
 The thread mentioned `AT+SER` as a USB mode switcher but didn't explain *how* that conclusion was reached.
 
+![](assets/image20.png)
+
 Going back to the shell scripts found earlier — the answer was in there:
 
 The scripts contain explicit references to modes `1` and `9`, with `echo` commands containing the strings `"serial"` and `"adb"`. The mode switch mechanism was documented in the device's own init scripts. The AT command research and the script crawling converged on the same information from two different directions.
+
+![](assets/image54.png)
 
 **Lesson:** When you're researching a device, the device often documents itself. Shell scripts in `/etc/init.d/`, `/etc/`, or scattered across `/data/` frequently contain exactly the information you're looking for — you just have to look.
 
@@ -207,9 +240,14 @@ USB\VID_05C6&PID_9008
 
 This VID shows up in the device's USB configuration files too, which confirms the device supports 9008 mode (useful for firmware flashing and full partition dumps).
 
+![](assets/image26.png)
+
 **A notable mismatch:**
 
 Rayhunter's serial binary uses `0xF626` as the USB composition value. But `/etc/debug.sh` sets `0xF622`. These are different USB compositions, meaning Rayhunter is deliberately picking a different mode than what debug.sh establishes.
+
+![](assets/image29.png)
+![](assets/image45.png)
 
 ```bash
 cat /data/usb/boot_hsusb_composition
@@ -217,7 +255,12 @@ cat /data/usb/boot_hsusb_composition
 
 This file defines ~20 USB state modes. The discrepancy between `F622` and `F626` is worth noting — it suggests Rayhunter made a deliberate choice about which USB interface profile to expose. Whether this matters for anything beyond driver compatibility on the host side is an open question.
 
+![](assets/image13.png)
+
 The `boot_hsusb_composition` file also provides kernel notes on `/dev/diag` which is relevant if you want to use QCSuper (covered later).
+
+![](assets/image51.png)
+![](assets/image18.png)
 
 ---
 
@@ -231,11 +274,19 @@ Running strings on the `atfwd` binary reveals:
 - Echo commands, daemon calls, and TTY definitions
 - Loads of internal state management
 
+![](assets/image46.png)
+![](assets/image47.png)
+![](assets/image53.png)
+
 The log file at `/data/logs/atfwd.log` is the reliable output channel for everything. Grepping it for AT commands beyond `+SYSCMD` gives you the full registered command list that the daemon handles — and one particular grep is a BINGO moment that reveals the full set of registered AT commands the device responds to.
 
 ```bash
 grep -i "registered AT" /data/logs/atfwd.log
 ```
+
+![](assets/image17.png)
+![](assets/image38.png)
+![](assets/image4.png)
 
 ---
 
@@ -249,9 +300,16 @@ Physical alternative: **you have to pry up the screen to access the physical EDL
 
 The XDA thread at https://xdaforums.com/t/resetting-verizon-orbic-speed-rc400l-firmware-flash.4334899/#post-86616269 is where I first found details on boot modes. That thread also contains pre-root research from other people that has genuinely useful detail — worth reading in full.
 
+![](assets/image31.png)
+
 **USB ports exposed during firmware flashing:**
 
 If you unplug the device mid-update (as described in that thread), Windows exposes a different set of COM ports. This is cleaner to parse on Windows than via `lsusb` on Linux because Windows enumerates them with VID/PID labels. The VID `05C6` appears for the 9008 debug mode interface, and **QPST works with that driver.**
+
+![](assets/image6.png)
+![](assets/image14.png)
+![](assets/image36.png)
+![](assets/image50.png)
 
 ---
 
@@ -262,6 +320,9 @@ Once you understand EDL mode, backing up the full firmware is straightforward us
 ```bash
 edl rl [OUTPUT_DIR]
 ```
+
+![](assets/image28.png)
+![](assets/image1.png)
 
 This dumps every partition the EDL loader exposes. Keep a backup. Seriously. I've bricked enough devices to make this a reflex.
 
@@ -289,11 +350,21 @@ qcsuper --usb-modem <VID:PID> --wireshark-live
 
 The `boot_hsusb_composition` settings matter here — you need the DIAG interface exposed over USB for QCSuper to work.
 
+![](assets/image9.png)
+![](assets/image49.png)
+![](assets/image34.png)
+
 **QPST (Qualcomm Product Support Tools)** is the official Qualcomm toolkit. With the right driver and 9008/DIAG mode:
 
 - **Phone Properties** — reports IMEI, software version, hardware info
 - **Service Programming** — allows NV item reads and writes
 - **EFS Explorer** — filesystem explorer for the modem's Embedded File System
+
+![](assets/image10.png)
+![](assets/image21.png)
+![](assets/image23.png)
+![](assets/image22.png)
+![](assets/image43.png)
 
 The EFS contains NV (non-volatile) items that control modem behavior. A generic NV items list is documented at https://xdaforums.com/t/qualcomm-complete-list-of-nv-items.1954029/ — the raw list has 8000+ items. Filtering for debug/diag-relevant ones:
 
@@ -317,15 +388,28 @@ AT$QCCLAC    -- note: has a slightly different list than AT+CLAC, or ordering ch
 AT$QCDMR
 ```
 
+![](assets/image42.png)
+![](assets/image7.png)
+![](assets/image30.png)
+![](assets/image32.png)
+
 There's an interesting overlap between `AT+CLAC` and `AT$QCCLAC` — the command sets aren't identical. Whether this is a firmware version artifact or an intentional separation of AT command domains I haven't fully resolved.
+
+![](assets/image24.png)
+![](assets/image19.png)
 
 For AT terminal work: if the terminal session freezes, sending a `BREAK` signal (in PuTTY: Special Commands > Break) usually clears it.
 
 Reference for Qualcomm modem AT commands that are hard to find elsewhere: https://manualsdump.com/en/download/manuals/maxon_telecom-mm-6280ind/143553
 
+![](assets/image39.png)
+
 A separate angle: the SIM7600 module documentation. The SIM7600 ships with a Qualcomm MDM9607 chipset and its AT command manual (V1.07) covers a command set that overlaps meaningfully with what the RC400L responds to. If you're reverse-engineering AT command behavior and hitting gaps in the RC400L docs, cross-referencing the SIM7600 manual is a productive shortcut.
 
 TR-069 reference docs also came up during this research. The RC400L has a `tr069` binary in its rootfs — flagging it here as something to return to.
+
+![](assets/image2.png)
+![](assets/image3.png)
 
 ---
 

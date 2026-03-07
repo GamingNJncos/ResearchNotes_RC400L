@@ -1,0 +1,5 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+battery  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/battery
+devinfo  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/bin/devinfo
+ip_addr  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/sbin/ip_addr

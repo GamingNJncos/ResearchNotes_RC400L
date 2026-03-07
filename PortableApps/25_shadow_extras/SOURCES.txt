@@ -1,0 +1,20 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+chfn.shadow   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/chfn
+chsh.shadow   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/chsh
+chgpasswd     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/chgpasswd
+expiry        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/expiry
+faillog       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/faillog
+gpasswd       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/gpasswd
+groupmems     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/groupmems
+grpck         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/grpck
+grpconv       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/grpconv
+grpunconv     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/grpunconv
+lastlog       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/lastlog
+logoutd       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/logoutd
+newgrp.shadow https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/newgrp
+newusers      https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/newusers
+prepasswd     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/prepasswd
+pwck          https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/pwck
+pwconv        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/pwconv
+pwunconv      https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/pwunconv

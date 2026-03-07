@@ -21,3 +21,6 @@ device_config
 __pycache__/
 .DS_Store
 Thumbs.db
+
+# Allow source link files within ignored dirs
+\!PortableApps/**/SOURCES.txt

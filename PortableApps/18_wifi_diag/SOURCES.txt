@@ -1,0 +1,5 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+cnss_diag   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/cnss_diag
+fampdiag    https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/fampdiag
+pktlogconf  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/pktlogconf

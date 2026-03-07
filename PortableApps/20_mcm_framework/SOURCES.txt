@@ -1,0 +1,12 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+mcm_ril_service              https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/mcm_ril_service
+mcm_data_srv                 https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/mcm_data_srv
+MCM_ATCOP_CLI                https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/MCM_ATCOP_CLI
+MCM_atcop_svc                https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/MCM_atcop_svc
+MCM_MOBILEAP_CLI             https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/MCM_MOBILEAP_CLI
+MCM_MOBILEAP_ConnectionManager https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/MCM_MOBILEAP_ConnectionManager
+uim_test_client              https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/uim_test_client
+libmcm.so.0                  https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/lib/libmcm.so.0
+libmcmipc.so.0               https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/lib/libmcmipc.so.0
+libmcm_log_util.so.0         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/lib/libmcm_log_util.so.0

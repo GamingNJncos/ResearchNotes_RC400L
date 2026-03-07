@@ -1,0 +1,9 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+mkfs.ubifs   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/mkfs.ubifs
+ubimkvol     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubimkvol
+ubinfo       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubinfo
+ubinize      https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubinize
+ubirename    https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubirename
+ubirmvol     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubirmvol
+ubiupdatevol https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/ubiupdatevol

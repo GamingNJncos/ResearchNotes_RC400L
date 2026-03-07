@@ -1,0 +1,4 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+modify_smbuser   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/modify_smbuser
+modify_workgroup https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/modify_workgroup

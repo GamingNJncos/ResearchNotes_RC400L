@@ -1,0 +1,17 @@
+Source files — ExtendedFi/JMR540_system_dump
+============================================
+su.shadow       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/bin/su.shadow
+login.shadow    https://github.com/ExtendedFi/JMR540_system_dump/blob/main/bin/login.shadow
+passwd.shadow   https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/passwd.shadow
+vipw.shadow     https://github.com/ExtendedFi/JMR540_system_dump/blob/main/sbin/vipw.shadow
+nologin         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/sbin/nologin
+useradd         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/useradd
+userdel         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/userdel
+usermod         https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/usermod
+groupadd        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/groupadd
+groupdel        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/groupdel
+groupmod        https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/groupmod
+chpasswd.shadow https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/sbin/chpasswd
+chage           https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/chage
+newgidmap       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/newgidmap
+newuidmap       https://github.com/ExtendedFi/JMR540_system_dump/blob/main/usr/bin/newuidmap
