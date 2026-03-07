@@ -1,6 +1,6 @@
 # MDM9607 Down the Rabbit Hole: RC400L, Rayhunter, and Cross-Vendor Firmware Forensics
 
-> **Audience:** This is a living research document, not a polished tutorial. It's the unfiltered record of my process — wrong turns included. If you want a slick how-to, the Rayhunter README is great. If you want to see how someone actually works through an unfamiliar device, keep reading.
+> **Audience:** This is a living research document, not a polished tutorial. It's the unfiltered record of my process — wrong turns included. 
 
 ---
 
