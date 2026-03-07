@@ -1,0 +1,23 @@
+# Raw firmware dumps — not distributed (size + licensing)
+Firmware_Backups/
+JMR540_Firmware/
+
+# Extracted/staged binaries from commercial firmware — not distributed
+PortableApps/
+
+# Original research working documents
+Private_Research/*.pdf
+Private_Research/*.docx
+Private_Research/*.doc
+
+# Local IDE/assistant session files
+.claude/
+
+# Device-specific binary blobs
+device_config
+
+# Local system / editor artifacts
+*.pyc
+__pycache__/
+.DS_Store
+Thumbs.db
