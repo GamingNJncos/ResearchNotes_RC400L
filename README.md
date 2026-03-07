@@ -1010,13 +1010,27 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 
 ## What's Next
 
-**Immediate:**
+**Confirmed done:**
 - [x] Deploy `00_audit/check_caps.sh` on live RC400L to confirm capability baseline
 - [x] Test `01_xtables/xtables-multi` — confirm iptables works on RC400L
 - [x] Inittab escape for full-caps process execution (tcpdump, iptables daemon)
-- [ ] Deploy `01_xtables/deploy_xtables.sh` on live device and confirm daemon starts
-- [ ] Test port 777 REDIRECT and TEE mirroring with active WiFi client
-- [ ] Create `/etc/shadow` on RC400L and test `02_shadow_suite/su.shadow`
+- [x] Deploy `01_xtables/deploy_xtables.sh` on live device — daemon running, CapEff=`0x3fffffffff`, persistent via inittab respawn
+- [x] ORBIC_PREROUTING and ORBIC_MANGLE chains live in nat/mangle tables, QCMAP untouched
+- [x] Port 777 → 8080 REDIRECT confirmed working via live rule injection
+- [x] Create `/etc/shadow` on RC400L — hash migrated from `/etc/passwd`, `/etc/passwd` updated to `x`
+- [x] Test `02_shadow_suite/su.shadow` — confirmed working with shadow credentials
+- [x] Deploy shadow-utils suite — `useradd`, `usermod`, `groupadd`, `passwd.shadow`, `chage`, `lastlog`, `faillog`, `pwck`, `gpasswd` all installed to `/cache/bin/`
+- [x] `wpa_supplicant` in concurrent AP+STA mode — `wlan1` (managed) running alongside `wlan0` (AP); `wpa_cli` status/scan/add_network confirmed; AP+managed concurrent mode verified by driver despite nl80211 combination advertisement suggesting otherwise
+- [x] Deploy all remaining PortableApps packages — `conntrackd`, `dbus-daemon`, UBI tools, `genl-ctrl-list`, traf-monitor, MCM framework, netlink QoS tools, and full shadow_extras installed to `/cache/bin/` and `/cache/lib/`
+- [x] `dbus-uuidgen`, `conntrackd`, `ubinfo`, `genl-ctrl-list`, `nl-cls-list`, `lastlog`, `pwck` all smoke-tested and confirmed working
+
+**Immediate:**
+- [ ] TEE traffic mirroring — test with active WiFi client and Wireshark capture host on LAN
+- [ ] tinyproxy — deploy and test transparent HTTP proxy via inittab escape; test port 80 → 8118 REDIRECT
+- [ ] thttpd — deploy and test on port 8888 via inittab escape
+- [ ] wpa_supplicant upstream connection — configure known SSID/PSK on `wlan1`, confirm association and routed traffic; scan returns empty while AP active (radio constraint) so target must be on same channel or pre-configured by SSID
+- [ ] MCM framework — start `mcm_ril_service` via inittab, test `MCM_ATCOP_CLI` and `uim_test_client` against live QMI stack
+- [ ] `dbus-daemon` — attempt direct launch from rootshell (AF_UNIX sockets may not be LSM-blocked); confirm `dbus-send`/`dbus-monitor` against running bus
 - [ ] Extract `libfwupgrade.so` from JMR540 and check its dependency chain
 - [ ] Examine JMR540 `/etc/cwmp/` config files for ACS URLs and credentials
 - [ ] Check Orbic's `tr069` binary for its configured ACS endpoint
@@ -1026,13 +1040,14 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 - [ ] Investigate Orbic's `oma_dm` and `dmclient` — another remote management surface
 - [ ] Compare QMI command surface between RC400L and JMR540 (both use qmuxd)
 - [ ] QCSuper capture session — what does the modem send/receive at the DIAG level during normal operation?
+- [ ] Policy routing: use iptables MARK + iproute2 to split traffic — LTE uplink for some clients, wlan1 STA uplink for others
 - [ ] Investigate the unused RGB LED — is it wired in firmware at all?
 
 **Longer term:**
 - [ ] Rust: contribute something to Rayhunter, or write a separate tool that uses the AT+SYSCMD channel
-- [ ] Attempt to drive `wpa_supplicant` in client mode on RC400L — can the device connect as a WiFi client rather than only serving as an AP?
 - [ ] SIM7600 AT command cross-reference — map the delta between SIM7600 docs and actual RC400L AT responses
 - [ ] Static smbd for ARM/glibc-2.22 — viable? Worth the effort?
+- [ ] TPROXY rule for TLS interception — redirect port 443 to a local certificate proxy with `wpa_supplicant` upstream
 
 ---
 
