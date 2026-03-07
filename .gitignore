@@ -22,5 +22,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Allow source link files within ignored dirs
+# Allow source link files and deploy/control scripts within ignored dirs
 \!PortableApps/**/SOURCES.txt
+\!PortableApps/**/*.sh

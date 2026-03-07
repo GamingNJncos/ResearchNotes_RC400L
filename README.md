@@ -27,6 +27,8 @@
 - [Step 17 — Staging PortableApps for the RC400L](#step-17--staging-portableapps-for-the-rc400l)
 - [Step 18 — The TR-069 Rabbit Hole (cwmpCPE)](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
 - [Step 19 — The SMB Dead End](#step-19--the-smb-dead-end)
+- [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
+- [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
 - [Retrospective: What I'd Do Differently](#retrospective-what-id-do-differently)
 - [What's Next](#whats-next)
 
@@ -831,6 +833,159 @@ The script handles the full flow: binary copy, inittab injection, init signal, p
 
 ---
 
+## Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture
+
+With tcpdump confirmed working via the inittab escape, the next problem was iptables. The RC400L ships with `xtables-multi` (the combined iptables/ip6tables binary) at `/usr/sbin/xtables-multi` and a full set of xtables extension plugins in `/usr/lib/xtables/` — including `TEE`, `REDIRECT`, `DNAT`, `MARK`, `CLASSIFY`, `TPROXY`, and 90+ others. All the kernel modules are loaded. But rootshell has the same capability ceiling problem as tcpdump: `CAP_NET_ADMIN` is required to modify netfilter rules, and it isn't in `0x00c0`.
+
+The deeper complication: **QCMAP is already running iptables rules**. QCMAP (Qualcomm Mobile Access Point Manager) manages the device's NAT and forwarding using QMI hardware offload, and it uses iptables extensively. The wrong approach — flushing all rules and starting fresh — would break WiFi client internet access. Any iptables solution has to coexist safely with whatever QCMAP has already configured.
+
+---
+
+### QCMAP Baseline State
+
+Before touching anything, the full iptables state was captured:
+
+```
+filter table:
+  INPUT   — default DROP
+  FORWARD — default DROP, but: -A FORWARD -i bridge0 -j ACCEPT  ← WiFi forwarding
+  OUTPUT  — default ACCEPT
+
+nat table:
+  POSTROUTING — QMI hardware NAT handles masquerade; no iptables MASQUERADE rule
+
+mangle, raw — empty
+```
+
+The critical rules to never touch:
+- `-A FORWARD -i bridge0 -j ACCEPT` — this is what allows WiFi clients to route packets
+- `-A INPUT -i bridge0 -j ACCEPT` — this is what makes the device reachable from LAN
+- Default policies — QCMAP sets INPUT/FORWARD to DROP; changing them risks open-forwarding the LTE interface
+
+---
+
+### The Design: Custom Chains + FIFO Daemon
+
+Rather than competing with QCMAP rules, the solution uses **custom chains that hook before QCMAP rules** at position 1. QCMAP chains are never modified. Custom chains end with an implicit RETURN, so unmatched packets fall through to QCMAP rules unchanged.
+
+Three custom chains:
+
+| Chain | Table | Purpose |
+|---|---|---|
+| `ORBIC_PREROUTING` | nat | REDIRECT / DNAT (port forwarding, port 777) |
+| `ORBIC_MANGLE` | mangle | MARK, DSCP, TEE mirroring, CONNMARK |
+| `ORBIC_FILTER` | filter | rate limiting, selective DROP/ACCEPT (off by default) |
+
+Hook insertion is idempotent — `-C` checks existence before `-I` to avoid duplicates on daemon restart:
+
+```sh
+$IPT -t nat -C PREROUTING -j ORBIC_PREROUTING 2>/dev/null || \
+    $IPT -t nat -I PREROUTING 1 -j ORBIC_PREROUTING
+```
+
+The persistent daemon is installed via inittab as a `respawn` entry — it restarts automatically if it crashes:
+
+```
+ipdm:5:respawn:/bin/sh /cache/ipt/ipt_daemon.sh
+```
+
+`ipt_daemon.sh` starts with `CapEff=0x3fffffffff` (full caps from init), creates a named pipe at `/cache/ipt/cmd.fifo`, applies the saved ruleset from `/cache/ipt/rules.sh` on startup, then enters a command loop:
+
+```sh
+while true; do
+    if read -r CMD < "$FIFO"; then
+        [ -z "$CMD" ] && continue
+        eval "$CMD" >> "$OUT" 2>&1
+        echo "##DONE##" >> "$OUT"
+    fi
+done
+```
+
+rootshell writes to the FIFO. The daemon executes with full caps. Output lands in `/cache/ipt/last_out`. The `##DONE##` sentinel lets `ipt_ctl.sh` know when the response is complete.
+
+---
+
+### The Control Client
+
+`ipt_ctl.sh` is the user-facing tool, run directly from rootshell:
+
+```sh
+# From rootshell:
+sh /cache/ipt/ipt_ctl.sh status           # dump all iptables tables
+sh /cache/ipt/ipt_ctl.sh reload           # reapply /cache/ipt/rules.sh
+sh /cache/ipt/ipt_ctl.sh flush            # clear ORBIC_* chains only (QCMAP untouched)
+sh /cache/ipt/ipt_ctl.sh log              # daemon log with timestamps and CapEff
+
+# Pass through any iptables command:
+sh /cache/ipt/ipt_ctl.sh iptables -t nat -L -n -v
+sh /cache/ipt/ipt_ctl.sh iptables -t nat -A ORBIC_PREROUTING \
+    -i bridge0 -p tcp --dport 777 -j REDIRECT --to-ports 8080
+```
+
+Live rules take effect immediately — no reload needed for pass-through commands. The `reload` command re-runs `/cache/ipt/rules.sh` which is the persistent on-disk configuration. The `save` command reads back live ORBIC rules and writes a new `rules.sh`. Together this gives a full edit-reload-save workflow from rootshell.
+
+---
+
+### Example: Port 777 Redirect
+
+WiFi clients connecting to the Orbic hotspot can be transparently redirected from any port to any local service. With rayhunter running on port 8080, enabling port 777 as an alias:
+
+```sh
+# Inline (live, not persisted):
+sh /cache/ipt/ipt_ctl.sh iptables -t nat -A ORBIC_PREROUTING \
+    -i bridge0 -p tcp --dport 777 -j REDIRECT --to-ports 8080
+
+# Or edit /cache/ipt/rules.sh and uncomment section [1], then:
+sh /cache/ipt/ipt_ctl.sh reload
+```
+
+Any WiFi client connecting to `192.168.1.1:777` gets silently redirected to the rayhunter UI on port 8080.
+
+---
+
+### Example: Traffic Mirroring via TEE
+
+The TEE xtables module duplicates packets to a gateway address on the LAN. Combined with Wireshark on a laptop connected to the Orbic hotspot, this gives a passive capture of all WiFi client traffic without any changes visible to the clients:
+
+```sh
+# Mirror all WiFi client traffic to 192.168.1.50:
+sh /cache/ipt/ipt_ctl.sh iptables -t mangle -A ORBIC_MANGLE \
+    -i bridge0 -j TEE --gateway 192.168.1.50
+
+# Or mirror a single client:
+sh /cache/ipt/ipt_ctl.sh iptables -t mangle -A ORBIC_MANGLE \
+    -i bridge0 -s 192.168.1.152 -j TEE --gateway 192.168.1.50
+```
+
+TEE duplicates at the mangle/PREROUTING stage — the mirror host receives a copy of every packet regardless of where it's destined.
+
+---
+
+### Files
+
+All files in `PortableApps/01_xtables/`:
+
+| File | Role |
+|---|---|
+| `deploy_xtables.sh` | One-time installer: pushes files, patches inittab, starts daemon, smoke tests |
+| `ipt_daemon.sh` | Persistent full-caps daemon, FIFO command loop, ruleset-on-startup |
+| `ipt_ctl.sh` | rootshell control client: start/stop/reload/flush/save/status/log + pass-through |
+| `ipt_rules.sh` | Editable ruleset: ORBIC_* chain setup + commented examples for all use cases |
+
+**To deploy from PC:**
+
+```bash
+MSYS_NO_PATHCONV=1 adb push PortableApps/01_xtables /data/tmp/xtables
+MSYS_NO_PATHCONV=1 adb shell
+# then in adb shell:
+rootshell
+sh /data/tmp/xtables/deploy_xtables.sh
+```
+
+The installer verifies xtables-multi, creates `/cache/ipt/`, installs and chmod's all scripts, patches inittab with the respawn entry, signals init, waits for the FIFO to appear, confirms full CapEff, and runs a smoke test showing the filter table. On any subsequent reboot the daemon comes up automatically — no re-deploy needed.
+
+---
+
 ## Retrospective: What I'd Do Differently
 
 **Start with firmware extraction, not the software installer.**
@@ -858,8 +1013,11 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 ## What's Next
 
 **Immediate:**
-- [ ] Deploy `00_audit/check_caps.sh` on live RC400L to confirm capability baseline
-- [ ] Test `01_xtables/xtables-multi` — confirm iptables works on RC400L
+- [x] Deploy `00_audit/check_caps.sh` on live RC400L to confirm capability baseline
+- [x] Test `01_xtables/xtables-multi` — confirm iptables works on RC400L
+- [x] Inittab escape for full-caps process execution (tcpdump, iptables daemon)
+- [ ] Deploy `01_xtables/deploy_xtables.sh` on live device and confirm daemon starts
+- [ ] Test port 777 REDIRECT and TEE mirroring with active WiFi client
 - [ ] Create `/etc/shadow` on RC400L and test `02_shadow_suite/su.shadow`
 - [ ] Extract `libfwupgrade.so` from JMR540 and check its dependency chain
 - [ ] Examine JMR540 `/etc/cwmp/` config files for ACS URLs and credentials
