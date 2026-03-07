@@ -720,6 +720,117 @@ This is a dead end for SMB without bringing a static `smbd` binary compiled for 
 
 ---
 
+## Step 20 — Getting tcpdump Working: Escaping the Capability Jail
+
+> **Confirmed: TCPDUMP WORKING** — live packet capture running on the RC400L with full kernel capabilities, producing valid pcap output.
+
+---
+
+### The Problem with rootshell
+
+Rayhunter's `rootshell` binary gives you `uid=0`, which looks like full root. It isn't.
+
+```
+CapInh: 0000000000000000
+CapPrm: 00000000000000c0
+CapEff: 00000000000000c0
+CapBnd: 00000000000000c0
+```
+
+`0x00c0` is two bits: `CAP_SETUID` (bit 7) and `CAP_SETGID` (bit 6). That's it. The entire ADB process tree — `adbd` and every shell it spawns including rootshell — is capped at this bounding set. The bounding set is a hard ceiling that **no child process can exceed**, regardless of `setuid` binaries or file capabilities.
+
+Consequences that hit immediately:
+
+- `tcpdump` requires `CAP_NET_RAW` (bit 13) to open an `AF_PACKET` socket. Not in `0x00c0`. Socket returns `EPERM`.
+- `chmod` on any file not owned by rootshell fails — `CAP_FOWNER` (bit 3) is missing. Files pushed via `adb push` are owned by uid 2000 (shell), and rootshell can't `chmod` them even as uid=0.
+- `socket()` for any protocol — TCP, UDP, raw — is blocked by a Qualcomm LSM hook in the kernel. rootshell cannot make any network connections at all.
+
+This is not accidental. It's a deliberate design choice in the Rayhunter installer. The rootshell gives you filesystem access but deliberately withholds network and device capabilities.
+
+---
+
+### Finding the Way Out
+
+Every process **not** spawned from the ADB tree has a full bounding set:
+
+```
+PID=1    NAME=init        BND=0000003fffffffff
+PID=1513 NAME=atfwd_daemon BND=0000003fffffffff
+PID=1738 NAME=rayhunter-daemon BND=0000003fffffffff
+```
+
+`init` (PID 1) is the obvious target. On this device, init uses standard SysV `inittab`. Because `/etc` is writable from rootshell (it's a ubifs mount, root-owned, and rootshell is uid=0), you can add entries to `/etc/inittab` directly. Sending `kill -HUP 1` causes busybox init to re-read the file and execute new `once` entries — spawning them as direct children of PID 1, with the full `0x3fffffffff` bounding set.
+
+That's the escape.
+
+---
+
+### What Had to Be Solved Along the Way
+
+**1. Getting a root-owned executable binary**
+
+`adb push` creates files owned by uid=2000. rootshell can't `chmod` them (no `CAP_FOWNER`). Solution: `cp` the pushed binary to a new path. `cp` creates a new file owned by the calling process — uid=0 — which rootshell *can* `chmod`.
+
+```sh
+cp /data/tmp/tcpdump /data/tmp/tcpdump_r
+chmod +x /data/tmp/tcpdump_r
+```
+
+**2. Choosing the right writable persistent path**
+
+`/tmp` is a symlink to `/var/tmp` (tmpfs). Files there get wiped by cleanup processes while long-running commands are in flight — learned the hard way when a live tcpdump had its binary and output pcap deleted mid-capture while the process still had them open. `/data/tmp/` (ubifs, persistent) is the right staging area, but it's root-owned 755 so `adb push` can't write there directly. rootshell must pre-create it with `chmod 777`.
+
+**3. The inittab tag length limit**
+
+Busybox init's inittab `id` field has a 4-character maximum. A tag like `tc022550` is silently mishandled. Tags must be ≤4 characters. Also: busybox tracks `once` entries by their tag — reusing the same tag in the same session means init won't re-run it. The tag must change each run.
+
+**4. Restoring inittab**
+
+The deploy script backs up `/etc/inittab` before injection and restores it after capture, followed by another `kill -HUP 1`. This leaves the system clean with no persistent inittab changes.
+
+---
+
+### The Result
+
+```
+tcpdump PID=23197  PPid=1
+CapEff: 0000003fffffffff
+
+tcpdump_r: listening on wlan0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+```
+
+Valid pcap (`D4C3B2A1` magic, 420 bytes from wlan0 management traffic).
+
+---
+
+### How to Use It
+
+Files are in `PortableApps/08_libpcap_tcpdump/`:
+
+```bash
+# Push from PC (once):
+adb push tcpdump /data/tmp/tcpdump
+adb push deploy_tcpdump.sh /data/tmp/deploy_tcpdump.sh
+
+# On device:
+adb shell
+rootshell
+sh /data/tmp/deploy_tcpdump.sh wlan0 100 /data/tmp/cap.pcap
+
+# Pull result:
+adb pull /data/tmp/cap.pcap cap.pcap
+# Open in Wireshark
+```
+
+Interface guide:
+- `wlan0` — WiFi clients connected to the Orbic hotspot *(recommended)*
+- `bridge0` — LAN bridge (includes wlan0 + USB RNDIS)
+- `rmnet0` — LTE uplink (requires active data session)
+
+The script handles the full flow: binary copy, inittab injection, init signal, process detection, wait loop, inittab restoration, and pull instructions.
+
+---
+
 ## Retrospective: What I'd Do Differently
 
 **Start with firmware extraction, not the software installer.**
