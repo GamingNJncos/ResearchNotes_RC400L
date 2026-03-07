@@ -1052,3 +1052,84 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 ---
 
 *Research ongoing. This document is updated as findings develop.*
+
+---
+
+## Capability Achievements
+
+A summary of what was actually unlocked on a $15 device running a narrowly-scoped IMSI catcher detector. Each capability either directly demonstrates a concrete security primitive or opens a specific class of research question that wasn't accessible before.
+
+---
+
+### Achieving tcpdump — Escaping the Capability Jail
+
+Rayhunter gives you `uid=0` but `CapBnd=0x00c0` — only `CAP_SETUID` and `CAP_SETGID`. The entire ADB process tree inherits this ceiling. `tcpdump` needs `CAP_NET_RAW` (bit 13). Not present. Every socket call from rootshell returns `EPERM` due to a Qualcomm LSM hook that blocks `AF_PACKET` — and `AF_INET`, and `AF_UNIX` — from the ADB subtree entirely.
+
+The escape: `init` (PID 1) has `CapBnd=0x3fffffffff`. `/etc/inittab` is writable from rootshell. A `once` entry injected and signalled with `kill -HUP 1` causes init to spawn directly with full capabilities — outside the ADB process tree entirely.
+
+Result: tcpdump running with `CapEff=0x3fffffffff`, `PPid=1`, capturing live 802.11 management frames and client data on `wlan0`/`bridge0` to a valid pcap.
+
+**What this opens:**
+- Full layer-2 visibility of every device connecting to the Orbic hotspot — 802.11 management frames, probe requests with device SSIDs, association sequences
+- Passive identification of client devices and their preferred network lists before they even associate
+- Capture of unencrypted DNS queries, HTTP, and any plaintext protocol from connected clients
+- Baseline for correlating IMSI catcher activity (Rayhunter's purpose) against concurrent WiFi client behavior
+- The inittab escape itself is the general primitive — it unlocks the full capability set for any subsequent tool, not just tcpdump
+
+---
+
+### Integrating iptables — Mangle, NAT, and the FIFO Daemon
+
+The device already had `xtables-multi` and all xtables plugins compiled in (`TEE`, `REDIRECT`, `DNAT`, `TPROXY`, `MARK`, `CLASSIFY`, `CONNMARK`, 90+ others). The kernel tables were live. rootshell just couldn't touch them — `CAP_NET_ADMIN` is absent from `0x00c0`.
+
+The challenge beyond caps: QCMAP (Qualcomm's mobile AP manager) already owns iptables. It sets `INPUT`/`FORWARD` default `DROP`, manages port-forwarding chains, and handles NAT via QMI hardware offload — no `MASQUERADE` rule anywhere. Flushing everything to start fresh would instantly kill WiFi client internet access.
+
+The solution: a persistent `respawn` daemon (`ipdm:5:respawn`) running with full capabilities, listening on a named pipe at `/cache/ipt/cmd.fifo`. rootshell writes commands; the daemon executes them and writes output back. Custom chains (`ORBIC_PREROUTING`, `ORBIC_MANGLE`, `ORBIC_FILTER`) are inserted at position 1 in each table — before all QCMAP chains — and end with implicit `RETURN`. QCMAP never knows they exist.
+
+**What this opens:**
+
+*Traffic redirection:*
+- Any port from any WiFi client can be silently redirected to any local service. Port 777 → rayhunter's web UI. Port 80 → a custom tinyproxy instance for transparent HTTP interception. Port 443 → `TPROXY` for TLS MITM with a certificate proxy.
+- `DNAT` rules can forward client traffic destined for specific IPs to a different host entirely — redirect a client's DNS to a custom resolver, or forward a specific app's traffic to a capture server on the LAN.
+
+*Traffic duplication (TEE):*
+- The `TEE` module duplicates every packet to a configurable gateway IP. A laptop connected to the Orbic hotspot receives a bitwise copy of every packet from every WiFi client simultaneously — fully passive, no ARP poisoning, no TCP resets, zero visibility to clients. This is a hardware-accelerated version of what would normally require a managed switch with port mirroring.
+- Scope can be narrowed to a single client IP: capture one device while others are unaffected.
+
+*Traffic marking and QoS:*
+- `MARK` and `DSCP` rules in the mangle table let you tag specific flows for downstream policy routing — prioritize or deprioritize specific clients or protocols at the LTE uplink (`rmnet0`).
+- `CONNMARK` persists marks across a connection's lifetime, enabling stateful per-flow policies without per-packet matching overhead.
+
+*The broader implication:* Any device connecting to this hotspot is subject to arbitrary traffic manipulation — redirection, duplication, injection, or blocking — with no indication to the client. The Orbic presents itself as a normal LTE hotspot. There is no banner, no certificate warning, no behavioral change. The attack surface is every HTTP session, every DNS query, every protocol that doesn't do its own endpoint verification.
+
+---
+
+### Establishing Formal Shadow Authentication
+
+Orbic ships with root credentials stored as an MD5 crypt hash inline in `/etc/passwd` — no `/etc/shadow`, no shadow password suite, no `useradd`/`usermod`, no account management tooling of any kind. The busybox `su` and `login` applets work but have no shadow support.
+
+From the JMR540 firmware — same glibc, same platform — the full shadow-utils suite was extracted and confirmed zero-dependency portable. On deployment: `/etc/shadow` is created by migrating the existing hash from `/etc/passwd`, the passwd file is updated to `x`, and `/etc/login.defs` is installed. `su.shadow`, `passwd.shadow`, `login.shadow`, `useradd`, `usermod`, `groupadd`, and the full `shadow_extras` suite (`pwck`, `grpck`, `gpasswd`, `newusers`, `lastlog`, `faillog`, `chage`, etc.) all install to `/cache/bin/` and function correctly.
+
+**What this opens:**
+- Proper multi-user account management on a device that previously had one hardcoded root account
+- `passwd.shadow` can rotate the root credential without touching `/etc/passwd` directly — the credential lives in `/etc/shadow` with correct permissions (`640`, root-owned)
+- `useradd`/`usermod` enables creating unprivileged service accounts — running daemons as non-root where QCMAP or other system services don't require it
+- `faillog` and `lastlog` provide primitive audit capability — tracking login attempts on a device that previously had none
+- `chage` enables password aging policies, `logoutd` enables time-based login restrictions — neither meaningful in isolation on an embedded device, but both available to scripts that automate access control
+- The formal credential separation is a prerequisite for anything that wants to call `pam_unix` or link against `libshadow` — opening the path to PAM-aware services
+
+---
+
+### Integrating wpa_supplicant — Concurrent AP and STA Mode
+
+The assumption going in: single-radio device, `iw list` shows `#{ managed, AP } <= 1` in valid interface combinations — AP and managed can't coexist. This turned out to be wrong in practice. Using the iptables daemon as a `CAP_NET_ADMIN` proxy, `iw phy phy0 interface add wlan1 type managed` succeeds while `wlan0` is actively serving AP clients. The driver allows it; the nl80211 combination advertisement was either conservative or misread.
+
+`wpa_supplicant v2.3` (extracted from JMR540, zero extra dependencies) launches on `wlan1` via inittab escape with full capabilities. `wpa_cli` communicates through its control socket: `status`, `scan`, `add_network`, `set_network`, `enable_network`, `list_networks` all work correctly. One constraint: passive channel scanning returns empty while the AP is active — the radio cannot go off-channel to scan without disrupting AP clients. Networks must be configured directly by SSID and PSK; the supplicant will associate when it hears the target beacon on the current channel.
+
+**What this opens:**
+- The RC400L can simultaneously serve as an 802.11 AP for clients and connect as a STA to an upstream WiFi network — turning it into a transparent WiFi bridge or repeater without any upstream router involvement
+- Combined with the iptables mangle/NAT stack: traffic from clients on `bridge0`/`wlan0` can be routed through the `wlan1` STA uplink rather than `rmnet0` (LTE) — WiFi uplink with LTE fallback, or LTE uplink for selected clients and WiFi for others, all policy-routed via `MARK` rules
+- `wpa_supplicant` in STA mode authenticates with WPA2-Enterprise (PEAP, EAP-TLS) in addition to PSK — the device can join corporate or research lab networks that require certificate-based auth
+- A device that looks like a normal Orbic hotspot from the client side is actually upstream-connected to whatever network the operator chooses, with full traffic visibility and manipulation capability on both sides
+- The P2P-GO mode (also supported by the driver alongside AP) opens Wi-Fi Direct — the device can act as a P2P group owner for direct device-to-device transfers outside the normal AP/STA model
+- **The operational picture:** a $15 device on a SIM card, connected wirelessly to an upstream network it can monitor, serving a local hotspot it can manipulate, with packet capture and arbitrary iptables rules on both sides — deployed in a laptop bag or left on a table
