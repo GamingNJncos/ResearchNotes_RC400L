@@ -436,7 +436,6 @@ The JMR540 firmware is publicly available. Several community dumps exist coverin
 - `root` dump — root with cachefs overlay applied
 - `modem` image — baseband firmware partition
 
-Focus on `system` and `recovery` first. The modem partition is a separate RTOS image and less useful for application-layer research unless you're going deep on the baseband.
 
 **Extraction tooling note (Windows pain):**
 
@@ -448,7 +447,6 @@ C:\Users\<user>\AppData\Roaming\Python\Python314\Scripts\ubireader_extract_files
 
 Use the full path. Don't try to rely on it being in PATH on Windows Git Bash. I wasted time on this.
 
-**WSL note:** WSL Ubuntu is available as an alternative, but don't ever use `--break-system-packages` with pip on it. Use a venv. Always.
 
 ---
 
