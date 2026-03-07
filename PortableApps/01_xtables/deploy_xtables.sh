@@ -66,12 +66,14 @@ if [ ! -x /usr/sbin/xtables-multi ]; then
 fi
 ok "xtables-multi found: $(ls -la /usr/sbin/xtables-multi | awk '{print $5, $9}')"
 
-# Check iptables symlink or direct call works
-if ! iptables -L -n >/dev/null 2>&1; then
-    err "iptables -L -n failed. Check if xtables kernel modules are loaded."
+# Check iptables binary accessible (don't run it — rootshell lacks CAP_NET_ADMIN;
+# the daemon will run iptables with full caps via inittab)
+if command -v iptables >/dev/null 2>&1 || [ -x /usr/sbin/xtables-multi ]; then
+    ok "iptables binary accessible (full test deferred to daemon smoke test)"
+else
+    err "iptables not found in PATH and /usr/sbin/xtables-multi missing."
     exit 1
 fi
-ok "iptables basic check passed"
 
 # Check source files exist
 for f in ipt_daemon.sh ipt_ctl.sh ipt_rules.sh; do
@@ -101,6 +103,16 @@ for f in ipt_daemon.sh ipt_ctl.sh ipt_rules.sh; do
     chmod +x "$DEST_DIR/$f"         || { err "chmod $f failed"; exit 1; }
     ok "Installed: $DEST_DIR/$f"
 done
+
+# rules.sh is the live editable ruleset loaded by the daemon on startup/reload.
+# ipt_rules.sh is the versioned source; rules.sh is the working copy.
+if [ ! -f "$DEST_DIR/rules.sh" ]; then
+    cp "$DEST_DIR/ipt_rules.sh" "$DEST_DIR/rules.sh"
+    chmod +x "$DEST_DIR/rules.sh"
+    ok "Created live ruleset: $DEST_DIR/rules.sh (copy of ipt_rules.sh)"
+else
+    ok "Live ruleset already exists: $DEST_DIR/rules.sh (not overwritten)"
+fi
 
 # Also install ipt_ctl.sh into a convenient PATH location if /cache is in PATH
 # Users can call it as: sh /cache/ipt/ipt_ctl.sh <cmd>
