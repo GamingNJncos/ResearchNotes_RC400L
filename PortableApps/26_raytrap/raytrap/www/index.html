@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RayTrap — RC400L</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',Courier,monospace;background:#080d14;color:#8ab4d4;min-height:100vh;font-size:14px}
+a{color:#00d4ff;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:13px}
+input,select,textarea{font-family:inherit;font-size:13px;background:#0a1628;border:1px solid #1e3a5f;color:#8ab4d4;padding:5px 8px;border-radius:3px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#00d4ff}
+select option{background:#0a1628}
+
+/* Header */
+#hdr{background:#05080f;border-bottom:1px solid #0d2035;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#hdr .brand{font-size:20px;font-weight:bold;color:#00d4ff;letter-spacing:2px}
+#hdr .sub{color:#3a6080;font-size:11px;flex:1}
+.svc-dots{display:flex;gap:12px;align-items:center}
+.dot{font-size:12px;display:flex;align-items:center;gap:4px}
+.dot .ind{width:8px;height:8px;border-radius:50%;background:#333;display:inline-block}
+.dot.ok .ind{background:#00ff88;box-shadow:0 0 6px #00ff88}
+.dot.err .ind{background:#ff4444;box-shadow:0 0 6px #ff4444}
+.dot.warn .ind{background:#ffaa00}
+
+/* Nav tabs */
+nav{background:#05080f;border-bottom:1px solid #0d2035;display:flex;overflow-x:auto}
+nav button{background:none;border:none;border-bottom:2px solid transparent;color:#3a6080;padding:10px 18px;white-space:nowrap;transition:all .15s}
+nav button:hover{color:#8ab4d4;background:#080d14}
+nav button.active{color:#00d4ff;border-bottom-color:#00d4ff}
+
+/* Content */
+main{padding:16px;max-width:1100px;margin:0 auto}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Cards / panels */
+.panel{background:#0a1220;border:1px solid #0d2035;border-radius:4px;margin-bottom:14px;overflow:hidden}
+.panel-hdr{background:#071018;border-bottom:1px solid #0d2035;padding:8px 14px;display:flex;justify-content:space-between;align-items:center}
+.panel-hdr h3{color:#00d4ff;font-size:13px;text-transform:uppercase;letter-spacing:1px}
+.panel-body{padding:14px}
+
+/* Status grid */
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
+.svc-card{background:#071018;border:1px solid #0d2035;border-radius:4px;padding:12px}
+.svc-card .name{font-size:11px;color:#3a6080;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.svc-card .val{font-size:16px;color:#8ab4d4}
+.svc-card .val.ok{color:#00ff88}
+.svc-card .val.err{color:#ff4444}
+.svc-card .val.off{color:#555}
+.svc-card .meta{font-size:11px;color:#3a6080;margin-top:4px}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:7px 10px;border-bottom:1px solid #0d2035;color:#3a6080;text-transform:uppercase;font-size:11px;letter-spacing:1px}
+td{padding:7px 10px;border-bottom:1px solid #071018;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#071520}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:bold;text-transform:uppercase}
+.badge.tee{background:#1a2a4a;color:#00d4ff;border:1px solid #1e3a5f}
+.badge.nat{background:#2a1a4a;color:#aa88ff;border:1px solid #3a1e5f}
+.badge.block{background:#3a0a0a;color:#ff4444;border:1px solid #5f1e1e}
+.badge.redir{background:#1a3a1a;color:#00ff88;border:1px solid #1e5f1e}
+.badge.mark{background:#3a2a0a;color:#ffaa00;border:1px solid #5f3e1e}
+
+/* Buttons */
+.btn{background:#0a1628;border:1px solid #1e3a5f;color:#8ab4d4;padding:5px 12px;border-radius:3px;transition:all .15s}
+.btn:hover{border-color:#00d4ff;color:#00d4ff}
+.btn.danger{border-color:#5f1e1e;color:#ff4444}
+.btn.danger:hover{background:#3a0a0a;border-color:#ff4444}
+.btn.primary{border-color:#00d4ff;color:#00d4ff}
+.btn.primary:hover{background:#0a2030}
+.btn.success{border-color:#00ff88;color:#00ff88}
+.btn.success:hover{background:#0a2018}
+.btn.sm{padding:3px 8px;font-size:12px}
+
+/* Forms */
+.form-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.form-row label{color:#3a6080;font-size:12px;min-width:80px}
+.form-row input,.form-row select{flex:1;min-width:120px}
+.form-help{color:#2a4060;font-size:11px;margin-top:3px}
+
+/* Rule type selector */
+.rule-type-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.rule-type-btns button{background:#071018;border:1px solid #1e3048;color:#3a6080;padding:5px 12px;border-radius:3px;font-size:12px}
+.rule-type-btns button.active{border-color:#00d4ff;color:#00d4ff;background:#0a1628}
+.rule-form{display:none;background:#071018;border:1px solid #0d2035;border-radius:4px;padding:12px;margin-bottom:12px}
+.rule-form.active{display:block}
+
+/* Log tail */
+.log-box{background:#040608;border:1px solid #0d2035;border-radius:3px;padding:10px;font-size:12px;max-height:200px;overflow-y:auto;line-height:1.6;color:#5a8050}
+
+/* Alerts */
+.alert{padding:8px 12px;border-radius:3px;margin-bottom:10px;font-size:13px}
+.alert.ok{background:#0a2018;border:1px solid #1e5f1e;color:#00ff88}
+.alert.err{background:#200a0a;border:1px solid #5f1e1e;color:#ff4444}
+
+/* Toggle */
+.toggle-wrap{display:flex;align-items:center;gap:10px}
+.toggle{position:relative;display:inline-block;width:40px;height:20px}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#1e3048;border-radius:20px;cursor:pointer;transition:.2s}
+.toggle-slider:before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:#3a6080;border-radius:50%;transition:.2s}
+.toggle input:checked+.toggle-slider{background:#0a2030;border:1px solid #00d4ff}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);background:#00d4ff}
+
+/* Spinner */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid #1e3048;border-top-color:#00d4ff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Capture */
+.cap-file{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #071018}
+.cap-file:last-child{border-bottom:none}
+.cap-file .fname{color:#8ab4d4;font-size:12px}
+.cap-file .fsize{color:#3a6080;font-size:11px}
+
+/* Misc */
+.dim{color:#3a6080;font-size:12px}
+.sep{border:none;border-top:1px solid #0d2035;margin:12px 0}
+#toast{position:fixed;bottom:20px;right:20px;background:#0a1628;border:1px solid #00d4ff;color:#00d4ff;padding:8px 16px;border-radius:4px;font-size:13px;display:none;z-index:100}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="brand">&#9655; RayTrap</div>
+  <div class="sub">RC400L Network Control &bull; 192.168.1.1:8888</div>
+  <div class="svc-dots">
+    <span class="dot" id="ds-ipt"><span class="ind"></span>IPT</span>
+    <span class="dot" id="ds-proxy"><span class="ind"></span>PROXY</span>
+    <span class="dot" id="ds-wifi"><span class="ind"></span>WIFI</span>
+    <span class="dot" id="ds-cap"><span class="ind"></span>CAP</span>
+  </div>
+</div>
+
+<nav>
+  <button class="active" data-tab="dashboard">Dashboard</button>
+  <button data-tab="firewall">Firewall</button>
+  <button data-tab="proxy">Proxy</button>
+  <button data-tab="wifi">WiFi</button>
+  <button data-tab="routing">Routing</button>
+  <button data-tab="capture">Capture</button>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════ DASHBOARD ═══════════════════════ -->
+<section id="tab-dashboard" class="tab-content active">
+  <div id="dash-alert"></div>
+  <div class="svc-grid" id="dash-cards">
+    <div class="svc-card"><div class="name">iptables daemon</div><div class="val off" id="dc-ipt">—</div><div class="meta" id="dc-ipt-meta"></div></div>
+    <div class="svc-card"><div class="name">tinyproxy</div><div class="val off" id="dc-proxy">—</div><div class="meta" id="dc-proxy-meta"></div></div>
+    <div class="svc-card"><div class="name">wpa_supplicant</div><div class="val off" id="dc-wpa">—</div><div class="meta" id="dc-wpa-meta"></div></div>
+    <div class="svc-card"><div class="name">thttpd (RayTrap)</div><div class="val ok">RUNNING</div><div class="meta">port 8888</div></div>
+    <div class="svc-card"><div class="name">wlan1 (STA)</div><div class="val off" id="dc-wlan1">—</div><div class="meta" id="dc-wlan1-meta"></div></div>
+    <div class="svc-card"><div class="name">Active Rules</div><div class="val" id="dc-rules">—</div><div class="meta">ORBIC chains</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr"><h3>System</h3><button class="btn sm" onclick="loadDash()">&#8635; Refresh</button></div>
+    <div class="panel-body">
+      <table><tbody id="dash-sys"></tbody></table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr"><h3>Quick Actions</h3></div>
+    <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="switchTab('firewall')">&#9654; Manage Firewall</button>
+      <button class="btn" onclick="switchTab('proxy')">&#9654; Configure Proxy</button>
+      <button class="btn" onclick="switchTab('wifi')">&#9654; WiFi Uplink</button>
+      <button class="btn" onclick="switchTab('capture')">&#9654; Start Capture</button>
+      <button class="btn danger" onclick="confirmFlush()">&#9888; Flush All Rules</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ FIREWALL ═══════════════════════ -->
+<section id="tab-firewall" class="tab-content">
+  <div id="fw-alert"></div>
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>Add Rule</h3>
+    </div>
+    <div class="panel-body">
+      <div class="rule-type-btns">
+        <button class="active" onclick="setRuleType('mirror',this)">&#8680; Mirror (TEE)</button>
+        <button onclick="setRuleType('redirect',this)">&#8651; Redirect Port</button>
+        <button onclick="setRuleType('dnat',this)">&#8594; Forward to Host</button>
+        <button onclick="setRuleType('block',this)">&#9747; Block Source</button>
+        <button onclick="setRuleType('mark',this)">&#9873; Mark Traffic</button>
+      </div>
+
+      <!-- Mirror -->
+      <div id="rf-mirror" class="rule-form active">
+        <div class="form-help" style="margin-bottom:8px">Copy matching packets to another host (TEE target in mangle). Source may be any WiFi client or left blank for all traffic.</div>
+        <div class="form-row"><label>Source IP</label><input id="m-src" placeholder="192.168.1.100 or blank for all"></div>
+        <div class="form-row"><label>Mirror to</label><input id="m-gw" placeholder="192.168.1.50  (Wireshark host)"></div>
+        <div class="form-row"><label>Interface</label>
+          <select id="m-iface"><option value="">any</option><option value="bridge0">bridge0 (WiFi LAN)</option><option value="wlan0">wlan0 (AP)</option><option value="rmnet0">rmnet0 (LTE)</option></select>
+        </div>
+        <button class="btn primary" onclick="addRule('mirror')">Add Mirror Rule</button>
+      </div>
+
+      <!-- Redirect port -->
+      <div id="rf-redirect" class="rule-form">
+        <div class="form-help" style="margin-bottom:8px">Transparently redirect traffic on one port to another port on this device (REDIRECT target in nat PREROUTING).</div>
+        <div class="form-row"><label>Protocol</label>
+          <select id="r-proto"><option>tcp</option><option>udp</option></select>
+        </div>
+        <div class="form-row"><label>From port</label><input id="r-dport" placeholder="80" type="number"></div>
+        <div class="form-row"><label>To port</label><input id="r-toport" placeholder="8118" type="number"></div>
+        <div class="form-row"><label>Source</label><input id="r-src" placeholder="192.168.1.0/24 or blank for all"></div>
+        <button class="btn primary" onclick="addRule('redirect')">Add Redirect Rule</button>
+      </div>
+
+      <!-- DNAT / Forward to host -->
+      <div id="rf-dnat" class="rule-form">
+        <div class="form-help" style="margin-bottom:8px">Forward incoming traffic on a port to a different host:port (DNAT in nat PREROUTING).</div>
+        <div class="form-row"><label>Protocol</label>
+          <select id="d-proto"><option>tcp</option><option>udp</option></select>
+        </div>
+        <div class="form-row"><label>Inbound port</label><input id="d-dport" placeholder="8080" type="number"></div>
+        <div class="form-row"><label>Forward to IP</label><input id="d-toip" placeholder="192.168.1.200"></div>
+        <div class="form-row"><label>Forward to port</label><input id="d-toport" placeholder="80" type="number"></div>
+        <button class="btn primary" onclick="addRule('dnat')">Add Forward Rule</button>
+      </div>
+
+      <!-- Block -->
+      <div id="rf-block" class="rule-form">
+        <div class="form-help" style="margin-bottom:8px">Drop all traffic from a source IP or subnet (DROP in filter FORWARD).</div>
+        <div class="form-row"><label>Block source</label><input id="b-src" placeholder="192.168.1.105 or 10.0.0.0/8"></div>
+        <div class="form-row"><label>Direction</label>
+          <select id="b-dir"><option value="in">Inbound (from src through device)</option><option value="out">Outbound (to src from device)</option></select>
+        </div>
+        <button class="btn danger" onclick="addRule('block')">Add Block Rule</button>
+      </div>
+
+      <!-- Mark -->
+      <div id="rf-mark" class="rule-form">
+        <div class="form-help" style="margin-bottom:8px">Mark packets from a source for policy routing. Used with the Routing tab to direct traffic via LTE or wlan1.</div>
+        <div class="form-row"><label>Source IP</label><input id="mk-src" placeholder="192.168.1.100"></div>
+        <div class="form-row"><label>Mark value</label><input id="mk-val" placeholder="10" type="number"></div>
+        <button class="btn primary" onclick="addRule('mark')">Add Mark Rule</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>Active Rules</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="loadFirewall()">&#8635; Refresh</button>
+        <button class="btn sm danger" onclick="confirmFlush()">Flush All</button>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Type</th><th>Description</th><th>Chain</th><th></th></tr></thead>
+        <tbody id="fw-rules"></tbody>
+      </table>
+      <div id="fw-empty" class="dim" style="padding:14px;display:none">No custom rules in ORBIC chains.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ PROXY ═══════════════════════ -->
+<section id="tab-proxy" class="tab-content">
+  <div id="proxy-alert"></div>
+  <div class="svc-grid">
+    <div class="svc-card"><div class="name">tinyproxy</div><div class="val off" id="px-status">—</div><div class="meta" id="px-pid"></div></div>
+    <div class="svc-card"><div class="name">Listen</div><div class="val" id="px-listen">192.168.1.1:8118</div><div class="meta">HTTP proxy port</div></div>
+    <div class="svc-card"><div class="name">Transparent HTTP</div><div class="val off" id="px-transparent">—</div><div class="meta">port 80 REDIRECT</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Control</h3></div>
+    <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn success" onclick="proxyAction('start')">&#9654; Start tinyproxy</button>
+      <button class="btn danger" onclick="proxyAction('stop')">&#9646;&#9646; Stop tinyproxy</button>
+      <button class="btn" onclick="loadProxy()">&#8635; Refresh Status</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Transparent HTTP Proxy</h3></div>
+    <div class="panel-body">
+      <p class="dim" style="margin-bottom:10px">When enabled, all port 80 traffic from WiFi clients is silently redirected through tinyproxy (REDIRECT iptables rule). Clients require no configuration. Port 443/HTTPS is NOT intercepted — clients must set proxy manually for HTTPS.</p>
+      <div class="toggle-wrap">
+        <label class="toggle"><input type="checkbox" id="px-transp-toggle" onchange="setTransparent(this.checked)"><span class="toggle-slider"></span></label>
+        <span id="px-transp-label">Disabled</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Configuration</h3><button class="btn sm primary" onclick="saveProxyConfig()">Save &amp; Reload</button></div>
+    <div class="panel-body">
+      <div class="form-row"><label>Port</label><input id="pc-port" value="8118" type="number"></div>
+      <div class="form-row"><label>Log Level</label>
+        <select id="pc-loglevel">
+          <option value="Critical">Critical (minimal)</option>
+          <option value="Error">Error</option>
+          <option value="Warning">Warning</option>
+          <option value="Notice">Notice</option>
+          <option value="Connect" selected>Connect (URL log)</option>
+          <option value="Info">Info (verbose)</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Allow</label><input id="pc-allow" value="192.168.1.0/24" placeholder="subnet allowed to use proxy"></div>
+      <div class="form-row"><label>Max Clients</label><input id="pc-maxclients" value="100" type="number"></div>
+      <div class="form-row"><label>Timeout (s)</label><input id="pc-timeout" value="90" type="number"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Access Log (last 30 lines)</h3><button class="btn sm" onclick="loadProxyLog()">&#8635; Refresh</button></div>
+    <div class="panel-body" style="padding:0">
+      <div class="log-box" id="px-log">Loading...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ WIFI ═══════════════════════ -->
+<section id="tab-wifi" class="tab-content">
+  <div id="wifi-alert"></div>
+  <div class="svc-grid">
+    <div class="svc-card"><div class="name">wlan1 State</div><div class="val off" id="wf-state">—</div><div class="meta" id="wf-ssid"></div></div>
+    <div class="svc-card"><div class="name">IP Address</div><div class="val" id="wf-ip">—</div><div class="meta">wlan1</div></div>
+    <div class="svc-card"><div class="name">wpa_supplicant</div><div class="val off" id="wf-wpa">—</div><div class="meta" id="wf-wpa-pid"></div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Add Network</h3></div>
+    <div class="panel-body">
+      <div class="form-row"><label>SSID</label><input id="wn-ssid" placeholder="Network name"></div>
+      <div class="form-row"><label>Password</label><input id="wn-psk" type="password" placeholder="WPA2 passphrase (blank for open)"></div>
+      <div class="form-row"><label></label>
+        <button class="btn primary" onclick="wifiAddNetwork()">Add &amp; Connect</button>
+      </div>
+      <p class="form-help">Note: wlan1 scanning is disabled while wlan0 AP is active. Enter SSID directly if known.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Saved Networks</h3><button class="btn sm" onclick="loadWifi()">&#8635; Refresh</button></div>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>ID</th><th>SSID</th><th>Status</th><th></th></tr></thead>
+        <tbody id="wf-networks"></tbody>
+      </table>
+      <div id="wf-empty" class="dim" style="padding:14px;display:none">No saved networks.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>wpa_cli Status</h3><button class="btn sm" onclick="loadWifi()">&#8635; Refresh</button></div>
+    <div class="panel-body" style="padding:0">
+      <div class="log-box" id="wf-raw">Loading...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ ROUTING ═══════════════════════ -->
+<section id="tab-routing" class="tab-content">
+  <div id="rt-alert"></div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Policy Routing — Route Client via LTE or wlan1</h3></div>
+    <div class="panel-body">
+      <p class="dim" style="margin-bottom:12px">
+        By default all WiFi clients share the LTE uplink. Add a client rule below to route a specific client's traffic via <strong style="color:#00d4ff">wlan1</strong> (if connected to an upstream AP) instead. Both uplinks can serve different clients simultaneously.
+      </p>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="text-align:center;padding:12px 20px;border:1px solid #0d2035;border-radius:4px;background:#071018">
+          <div style="font-size:20px;margin-bottom:4px">&#128246;</div>
+          <div style="color:#00d4ff;font-size:12px">LTE (rmnet0)</div>
+          <div class="dim">table 100</div>
+        </div>
+        <div style="display:flex;align-items:center;color:#3a6080">&#8660;</div>
+        <div style="text-align:center;padding:12px 20px;border:1px solid #0d2035;border-radius:4px;background:#071018">
+          <div style="font-size:20px;margin-bottom:4px">&#128225;</div>
+          <div style="color:#00ff88;font-size:12px">WiFi STA (wlan1)</div>
+          <div class="dim">table 200</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Client IP</label><input id="rt-src" placeholder="192.168.1.100">
+        <label>Via</label>
+        <select id="rt-via"><option value="lte">LTE (rmnet0, table 100)</option><option value="wlan1">wlan1 STA (table 200)</option></select>
+        <button class="btn primary" onclick="addRoute()">Add Rule</button>
+      </div>
+      <div class="form-row">
+        <label></label>
+        <button class="btn sm" onclick="setupRoutingTables()">&#9881; Initialize Routing Tables</button>
+        <span class="dim" style="margin-left:6px">Run once to create tables 100 + 200</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>ip rule list</h3><button class="btn sm" onclick="loadRouting()">&#8635; Refresh</button></div>
+    <div class="panel-body" style="padding:0;overflow-x:auto">
+      <table>
+        <thead><tr><th>Priority</th><th>From</th><th>Via Table</th><th>Description</th><th></th></tr></thead>
+        <tbody id="rt-rules"></tbody>
+      </table>
+      <div id="rt-empty" class="dim" style="padding:14px;display:none">No custom ip rules.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Routing Tables</h3></div>
+    <div class="panel-body" style="padding:0">
+      <div class="log-box" id="rt-raw">Loading...</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ CAPTURE ═══════════════════════ -->
+<section id="tab-capture" class="tab-content">
+  <div id="cap-alert"></div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Start Capture</h3></div>
+    <div class="panel-body">
+      <div class="form-row">
+        <label>Interface</label>
+        <select id="cap-iface">
+          <option value="bridge0">bridge0 (WiFi LAN &#8644; device)</option>
+          <option value="wlan0">wlan0 (AP radio)</option>
+          <option value="rmnet0">rmnet0 (LTE uplink)</option>
+          <option value="wlan1">wlan1 (STA)</option>
+          <option value="any">any (all interfaces)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Filter</label>
+        <input id="cap-filter" placeholder="tcpdump BPF: host 8.8.8.8, port 80, tcp, etc. (blank = all)">
+      </div>
+      <div class="form-row">
+        <label>Duration</label>
+        <select id="cap-dur">
+          <option value="30">30 seconds</option>
+          <option value="60" selected>1 minute</option>
+          <option value="120">2 minutes</option>
+          <option value="300">5 minutes</option>
+          <option value="600">10 minutes</option>
+          <option value="0">Until stopped manually</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Filename</label>
+        <input id="cap-name" placeholder="cap1  (auto-timestamped)">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn success" onclick="startCapture()">&#9654; Start Capture</button>
+        <button class="btn danger" onclick="stopCapture()">&#9646;&#9646; Stop</button>
+        <button class="btn" onclick="loadCapture()">&#8635; Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>Active Capture</h3></div>
+    <div class="panel-body">
+      <div id="cap-active" class="dim">No capture running.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>Saved Captures</h3>
+      <button class="btn sm danger" onclick="clearCaptures()">Clear All</button>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div id="cap-files" style="padding:10px">
+        <div class="dim">No captures yet.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+function $(id){ return document.getElementById(id); }
+
+function toast(msg, isErr){
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.borderColor = isErr ? '#ff4444' : '#00d4ff';
+  t.style.color = isErr ? '#ff4444' : '#00d4ff';
+  t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>{ t.style.display='none'; }, 3000);
+}
+
+function alert2(id, msg, isErr){
+  const el = $(id);
+  if(!msg){ el.innerHTML=''; return; }
+  el.innerHTML = `<div class="alert ${isErr?'err':'ok'}">${msg}</div>`;
+}
+
+async function api(cgi, params, method, body, timeoutMs){
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), timeoutMs || 30000);
+  try {
+    const url = '/cgi-bin/' + cgi + (params ? '?' + params : '');
+    const opts = { method: method||'GET', signal: ac.signal };
+    if(body){ opts.body = body; opts.headers = {'Content-Type':'application/x-www-form-urlencoded'}; }
+    const r = await fetch(url, opts);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  } catch(e) {
+    console.error(cgi, e);
+    return { ok: false, error: String(e) };
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+function encode(obj){
+  return Object.entries(obj).map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
+}
+
+function setDot(id, state){
+  const el = $(id);
+  el.className = 'dot ' + (state==='ok'?'ok':state==='err'?'err':'warn');
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+
+const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wifi:loadWifi, routing:loadRouting, capture:loadCapture };
+
+function switchTab(name){
+  document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  $('tab-'+name).classList.add('active');
+  document.querySelector('[data-tab="'+name+'"]').classList.add('active');
+  if(loaders[name]) loaders[name]();
+}
+
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>switchTab(btn.dataset.tab));
+});
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+async function loadDash(){
+  const d = await api('status.cgi','action=all');
+  if(!d.ok){ alert2('dash-alert','Status fetch failed: '+d.error,true); return; }
+  const s = d.data;
+
+  // Service cards
+  function setSvc(cid, mid, ok, val, meta){
+    $(cid).className = 'val '+(ok?'ok':'err');
+    $(cid).textContent = val;
+    if($(mid)) $(mid).textContent = meta||'';
+  }
+
+  setSvc('dc-ipt','dc-ipt-meta', s.ipt_running, s.ipt_running?'RUNNING':'STOPPED', s.ipt_pid?'PID '+s.ipt_pid:'');
+  setSvc('dc-proxy','dc-proxy-meta', s.proxy_running, s.proxy_running?'RUNNING':'STOPPED', s.proxy_pid?'PID '+s.proxy_pid:'');
+  setSvc('dc-wpa','dc-wpa-meta', s.wpa_running, s.wpa_running?'RUNNING':'STOPPED', s.wpa_pid?'PID '+s.wpa_pid:'');
+  setSvc('dc-wlan1','dc-wlan1-meta', s.wlan1_up, s.wlan1_state||'DOWN', s.wlan1_ip||'');
+  $('dc-rules').textContent = s.rule_count != null ? s.rule_count : '—';
+  $('dc-rules').className = 'val';
+
+  setDot('ds-ipt', s.ipt_running?'ok':'err');
+  setDot('ds-proxy', s.proxy_running?'ok':'warn');
+  setDot('ds-wifi', s.wpa_running?'ok':'warn');
+  setDot('ds-cap', s.cap_running?'ok':'warn');
+
+  // System table
+  const rows = [
+    ['Uptime', s.uptime||'—'],
+    ['/cache free', s.cache_free||'—'],
+    ['/data free', s.data_free||'—'],
+    ['Device IP', '192.168.1.1'],
+    ['Kernel', s.kernel||'—'],
+  ];
+  $('dash-sys').innerHTML = rows.map(([k,v])=>`<tr><td class="dim">${k}</td><td>${v}</td></tr>`).join('');
+}
+
+// ─── Firewall ─────────────────────────────────────────────────────────────────
+
+function setRuleType(t, btn){
+  document.querySelectorAll('.rule-type-btns button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.rule-form').forEach(f=>f.classList.remove('active'));
+  btn.classList.add('active');
+  $('rf-'+t).classList.add('active');
+}
+
+function badgeHtml(target){
+  const map = { TEE:'tee', REDIRECT:'redir', DNAT:'nat', DROP:'block', MARK:'mark', ACCEPT:'redir' };
+  const cls = map[target]||'';
+  return `<span class="badge ${cls}">${target}</span>`;
+}
+
+async function loadFirewall(){
+  const d = await api('firewall.cgi','action=list');
+  if(!d.ok){ alert2('fw-alert','Failed: '+d.error,true); return; }
+  const rules = d.data||[];
+  const tbody = $('fw-rules');
+  if(!rules.length){
+    tbody.innerHTML='';
+    $('fw-empty').style.display='block';
+    return;
+  }
+  $('fw-empty').style.display='none';
+  tbody.innerHTML = rules.map((r,i)=>`
+    <tr>
+      <td class="dim">${r.num}</td>
+      <td>${badgeHtml(r.target)}</td>
+      <td>${r.friendly}</td>
+      <td class="dim">${r.table}/${r.chain}</td>
+      <td><button class="btn sm danger" onclick="deleteRule('${r.table}','${r.chain}',${r.num})">&#10005;</button></td>
+    </tr>`).join('');
+}
+
+async function addRule(type){
+  let params = {};
+  if(type==='mirror'){
+    const gw = $('m-gw').value.trim();
+    if(!gw){ toast('Mirror gateway required',true); return; }
+    params = { action:'add_mirror', src:$('m-src').value.trim(), gw, iface:$('m-iface').value };
+  } else if(type==='redirect'){
+    const dport=$('r-dport').value, toport=$('r-toport').value;
+    if(!dport||!toport){ toast('Both ports required',true); return; }
+    params = { action:'add_redirect', proto:$('r-proto').value, dport, toport, src:$('r-src').value.trim() };
+  } else if(type==='dnat'){
+    const dport=$('d-dport').value, toip=$('d-toip').value.trim(), toport=$('d-toport').value;
+    if(!dport||!toip||!toport){ toast('Port, IP, and destination port required',true); return; }
+    params = { action:'add_dnat', proto:$('d-proto').value, dport, toip, toport };
+  } else if(type==='block'){
+    const src=$('b-src').value.trim();
+    if(!src){ toast('Source IP/subnet required',true); return; }
+    params = { action:'add_block', src, dir:$('b-dir').value };
+  } else if(type==='mark'){
+    const src=$('mk-src').value.trim(), val=$('mk-val').value;
+    if(!src||!val){ toast('Source and mark value required',true); return; }
+    params = { action:'add_mark', src, mark:val };
+  }
+  const d = await api('firewall.cgi', null, 'POST', encode(params));
+  if(d.ok){ toast('Rule added'); loadFirewall(); }
+  else { toast('Error: '+d.error, true); }
+}
+
+async function deleteRule(table, chain, num){
+  const d = await api('firewall.cgi', null, 'POST', encode({action:'delete',table,chain,num}));
+  if(d.ok){ toast('Rule deleted'); loadFirewall(); }
+  else { toast('Error: '+d.error, true); }
+}
+
+async function confirmFlush(){
+  if(!confirm('Flush all ORBIC firewall rules? QCMAP/WiFi rules are preserved.')) return;
+  const d = await api('firewall.cgi', null, 'POST', encode({action:'flush'}));
+  if(d.ok){ toast('Rules flushed'); loadFirewall(); }
+  else { toast('Error: '+d.error, true); }
+}
+
+// ─── Proxy ────────────────────────────────────────────────────────────────────
+
+async function loadProxy(){
+  const d = await api('proxy.cgi','action=status');
+  if(!d.ok){ alert2('proxy-alert','Failed: '+d.error,true); return; }
+  const s = d.data;
+  const pel = $('px-status');
+  pel.textContent = s.running ? 'RUNNING' : 'STOPPED';
+  pel.className = 'val '+(s.running?'ok':'err');
+  $('px-pid').textContent = s.pid ? 'PID '+s.pid : '';
+  $('px-transparent').textContent = s.transparent ? 'ENABLED' : 'DISABLED';
+  $('px-transparent').className = 'val '+(s.transparent?'ok':'off');
+  $('px-transp-toggle').checked = !!s.transparent;
+  $('px-transp-label').textContent = s.transparent ? 'Enabled' : 'Disabled';
+  loadProxyLog();
+}
+
+async function proxyAction(act){
+  const d = await api('proxy.cgi', null, 'POST', encode({action:act}));
+  if(d.ok){ toast(act==='start'?'tinyproxy started':'tinyproxy stopped'); setTimeout(loadProxy,1500); }
+  else { toast('Error: '+d.error, true); }
+}
+
+async function setTransparent(on){
+  const d = await api('proxy.cgi', null, 'POST', encode({action: on?'enable_transparent':'disable_transparent'}));
+  if(d.ok){ toast(on?'Transparent proxy enabled':'Transparent proxy disabled'); loadProxy(); }
+  else { toast('Error: '+d.error, true); $('px-transp-toggle').checked = !on; }
+}
+
+async function saveProxyConfig(){
+  const params = {
+    action:'set_config',
+    port: $('pc-port').value,
+    loglevel: $('pc-loglevel').value,
+    allow: $('pc-allow').value,
+    maxclients: $('pc-maxclients').value,
+    timeout: $('pc-timeout').value,
+  };
+  const d = await api('proxy.cgi', null, 'POST', encode(params));
+  if(d.ok){ toast('Config saved — restart tinyproxy to apply'); }
+  else { toast('Error: '+d.error, true); }
+}
+
+async function loadProxyLog(){
+  const d = await api('proxy.cgi','action=log');
+  $('px-log').textContent = d.ok ? (d.data||'(empty log)') : 'Error: '+d.error;
+  const box = $('px-log');
+  box.scrollTop = box.scrollHeight;
+}
+
+// ─── WiFi ─────────────────────────────────────────────────────────────────────
+
+async function loadWifi(){
+  const d = await api('wifi.cgi','action=status');
+  if(!d.ok){ alert2('wifi-alert','Failed: '+d.error,true); return; }
+  const s = d.data;
+  $('wf-state').textContent = s.wpa_state||'UNKNOWN';
+  $('wf-state').className = 'val '+(s.wpa_state==='COMPLETED'?'ok':(s.wpa_state?'warn':'off'));
+  $('wf-ssid').textContent = s.ssid||'';
+  $('wf-ip').textContent = s.ip_address||'—';
+  $('wf-wpa').textContent = s.wpa_running?'RUNNING':'STOPPED';
+  $('wf-wpa').className = 'val '+(s.wpa_running?'ok':'err');
+  $('wf-wpa-pid').textContent = s.wpa_pid?'PID '+s.wpa_pid:'';
+  $('wf-raw').textContent = s.raw||'';
+
+  const nets = s.networks||[];
+  const tbody = $('wf-networks');
+  if(!nets.length){ $('wf-empty').style.display='block'; tbody.innerHTML=''; return; }
+  $('wf-empty').style.display='none';
+  tbody.innerHTML = nets.map(n=>`
+    <tr>
+      <td class="dim">${n.id}</td>
+      <td>${n.ssid}</td>
+      <td><span class="badge ${n.current?'redir':''}"> ${n.current?'CURRENT':'saved'}</span></td>
+      <td>
+        <button class="btn sm" onclick="wifiConnect(${n.id})">Connect</button>
+        <button class="btn sm danger" onclick="wifiRemove(${n.id})">&#10005;</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function wifiAddNetwork(){
+  const ssid=$('wn-ssid').value.trim(), psk=$('wn-psk').value;
+  if(!ssid){ toast('SSID required',true); return; }
+  const d = await api('wifi.cgi',null,'POST',encode({action:'add_network',ssid,psk}));
+  if(d.ok){ toast('Network added — connecting...'); $('wn-ssid').value=''; $('wn-psk').value=''; setTimeout(loadWifi,2000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function wifiConnect(id){
+  const d = await api('wifi.cgi',null,'POST',encode({action:'connect',id}));
+  if(d.ok){ toast('Connecting...'); setTimeout(loadWifi,3000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function wifiRemove(id){
+  const d = await api('wifi.cgi',null,'POST',encode({action:'remove',id}));
+  if(d.ok){ toast('Network removed'); loadWifi(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+// ─── Routing ──────────────────────────────────────────────────────────────────
+
+async function loadRouting(){
+  const d = await api('routing.cgi','action=list');
+  if(!d.ok){ alert2('rt-alert','Failed: '+d.error,true); return; }
+  const s = d.data;
+  const rules = s.rules||[];
+  const tbody = $('rt-rules');
+  if(!rules.length){ $('rt-empty').style.display='block'; tbody.innerHTML=''; }
+  else {
+    $('rt-empty').style.display='none';
+    tbody.innerHTML = rules.map(r=>`
+      <tr>
+        <td class="dim">${r.priority}</td>
+        <td>${r.from||'all'}</td>
+        <td>${r.table}</td>
+        <td class="dim">${r.desc||''}</td>
+        <td><button class="btn sm danger" onclick="deleteIpRule(${r.priority},'${r.from||''}')">&#10005;</button></td>
+      </tr>`).join('');
+  }
+  $('rt-raw').textContent = s.raw||'';
+}
+
+async function setupRoutingTables(){
+  const d = await api('routing.cgi',null,'POST',encode({action:'setup_tables'}));
+  if(d.ok){ toast('Tables 100 (LTE) + 200 (wlan1) initialized'); loadRouting(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function addRoute(){
+  const src=$('rt-src').value.trim(), via=$('rt-via').value;
+  if(!src){ toast('Client IP required',true); return; }
+  const d = await api('routing.cgi',null,'POST',encode({action:'add_client',src,via}));
+  if(d.ok){ toast('Routing rule added'); loadRouting(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function deleteIpRule(priority, from){
+  const d = await api('routing.cgi',null,'POST',encode({action:'delete_rule',priority,from}));
+  if(d.ok){ toast('Rule deleted'); loadRouting(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+// ─── Capture ──────────────────────────────────────────────────────────────────
+
+async function loadCapture(){
+  const d = await api('capture.cgi','action=status');
+  if(!d.ok){ alert2('cap-alert','Failed: '+d.error,true); return; }
+  const s = d.data;
+  if(s.running){
+    $('cap-active').innerHTML = `<span class="dot ok"><span class="ind"></span></span> <strong>tcpdump</strong> running — PID ${s.pid} &bull; Interface: ${s.iface} &bull; File: ${s.file} &bull; <span class="dim">${s.elapsed||''}s elapsed</span>`;
+    setDot('ds-cap','ok');
+  } else {
+    $('cap-active').innerHTML = '<span class="dim">No capture running.</span>';
+    setDot('ds-cap','warn');
+  }
+
+  const files = s.files||[];
+  if(!files.length){
+    $('cap-files').innerHTML = '<div class="dim">No captures yet.</div>';
+  } else {
+    $('cap-files').innerHTML = files.map(f=>`
+      <div class="cap-file">
+        <span class="fname">&#128190; ${f.name}</span>
+        <span class="fsize">${f.size}</span>
+        <a class="btn sm" href="/cgi-bin/capture.cgi?action=download&file=${encodeURIComponent(f.name)}">Download</a>
+      </div>`).join('');
+  }
+}
+
+async function startCapture(){
+  const iface=$('cap-iface').value, filter=$('cap-filter').value.trim(),
+        dur=$('cap-dur').value, name=$('cap-name').value.trim();
+  const d = await api('capture.cgi',null,'POST',encode({action:'start',iface,filter,dur,name}));
+  if(d.ok){ toast('Capture started'); setTimeout(loadCapture,1000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function stopCapture(){
+  const d = await api('capture.cgi',null,'POST',encode({action:'stop'}));
+  if(d.ok){ toast('Capture stopped'); setTimeout(loadCapture,500); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function clearCaptures(){
+  if(!confirm('Delete all saved capture files?')) return;
+  const d = await api('capture.cgi',null,'POST',encode({action:'clear'}));
+  if(d.ok){ toast('Captures cleared'); loadCapture(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+loadDash();
+setInterval(()=>{
+  const active = document.querySelector('.tab-content.active');
+  if(active && active.id==='tab-dashboard') loadDash();
+  if(active && active.id==='tab-capture') loadCapture();
+}, 15000);
+</script>
+</body>
+</html>

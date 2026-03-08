@@ -1,0 +1,137 @@
+#!/bin/sh
+# /etc/init.d/raytrap_daemon — RayTrap service manager
+# Invoked by /etc/init.d/misc-daemon at boot (after modem ONLINE).
+# Also safe to call manually: raytrap_daemon { start | stop | restart | status }
+#
+# Uses busybox httpd (built into device busybox) — no custom binary needed.
+# set -e is NOT used here on purpose: individual failures are handled
+# with || true so that misc-daemon's own set -e is never triggered by us.
+
+RAYTRAP_DIR=/cache/raytrap
+WWW=$RAYTRAP_DIR/www
+PIDFILE=/tmp/raytrap_httpd.pid
+
+# Wait up to N seconds for a network interface to appear
+wait_iface() {
+    local iface=$1 max=${2:-15} n=0
+    while [ $n -lt $max ]; do
+        [ -d /sys/class/net/$iface ] && return 0
+        n=$((n+1))
+        sleep 1
+    done
+    echo "[raytrap] WARNING: $iface did not appear after ${max}s, starting anyway"
+    return 0  # non-fatal — httpd binds 0.0.0.0 and works without bridge0
+}
+
+start_raytrap() {
+    # Guard: busybox must be present (always is)
+    if ! busybox httpd --help >/dev/null 2>&1; then
+        echo "[raytrap] busybox httpd not available — skipping"
+        return 0
+    fi
+
+    # Guard: already running
+    if [ -f "$PIDFILE" ]; then
+        local old=$(cat "$PIDFILE" 2>/dev/null)
+        if [ -n "$old" ] && [ -d "/proc/$old" ]; then
+            echo "[raytrap] httpd already running (PID=$old)"
+            return 0
+        fi
+        rm -f "$PIDFILE"
+    fi
+
+    # Kill any stale httpd on port 8888
+    for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
+        local cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
+        case "$cmd" in *httpd*-p*8888*) kill "$p" 2>/dev/null || true;; esac
+    done
+
+    # Wait for WiFi LAN bridge
+    wait_iface bridge0 15
+
+    # Launch busybox httpd — daemonizes automatically (forks into background)
+    busybox httpd -p 8888 -h "$WWW" || true
+
+    # Find the PID and write pidfile
+    local n=0
+    while [ $n -lt 8 ]; do
+        sleep 1
+        for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
+            local cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
+            case "$cmd" in *busybox*httpd*-p*8888*)
+                echo "$p" > "$PIDFILE"
+                echo "[raytrap] httpd started (PID=$p, port 8888)"
+                return 0
+            ;; esac
+        done
+        n=$((n+1))
+    done
+
+    echo "[raytrap] WARNING: httpd did not start within 8s"
+    return 0  # still non-fatal so misc-daemon set -e is not triggered
+}
+
+stop_raytrap() {
+    if [ -f "$PIDFILE" ]; then
+        local pid=$(cat "$PIDFILE" 2>/dev/null)
+        if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+            sleep 1
+            [ -d "/proc/$pid" ] && kill -9 "$pid" 2>/dev/null || true
+            echo "[raytrap] httpd stopped (PID=$pid)"
+        fi
+        rm -f "$PIDFILE"
+    fi
+    # Fallback: scan /proc for stray httpd on port 8888
+    for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
+        local cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
+        case "$cmd" in *httpd*-p*8888*)
+            kill "$p" 2>/dev/null || true
+            echo "[raytrap] killed stray httpd PID=$p"
+        ;; esac
+    done
+    return 0
+}
+
+case "$1" in
+    start)
+        echo -n "Starting RayTrap: "
+        start_raytrap
+        echo "done"
+        ;;
+    stop)
+        echo -n "Stopping RayTrap: "
+        stop_raytrap
+        echo "done"
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    status)
+        if [ -f "$PIDFILE" ]; then
+            pid=$(cat "$PIDFILE" 2>/dev/null)
+            if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+                echo "RayTrap running: PID=$pid  http://192.168.1.1:8888/"
+                exit 0
+            fi
+        fi
+        # Check by process scan
+        for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
+            cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
+            case "$cmd" in *busybox*httpd*-p*8888*)
+                echo "RayTrap running: PID=$p  http://192.168.1.1:8888/"
+                exit 0
+            ;; esac
+        done
+        echo "RayTrap not running"
+        exit 1
+        ;;
+    *)
+        echo "Usage: $0 { start | stop | restart | status }" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

@@ -25,3 +25,9 @@ Thumbs.db
 # Allow source link files and deploy/control scripts within ignored dirs
 \!PortableApps/**/SOURCES.txt
 \!PortableApps/**/*.sh
+
+# Allow RayTrap web UI (26_raytrap) — shell CGI scripts, HTML, and init script
+\!PortableApps/26_raytrap/**/*.cgi
+\!PortableApps/26_raytrap/**/index.html
+\!PortableApps/26_raytrap/**/raytrap_daemon
+\!PortableApps/26_raytrap/**/tinyproxy.conf
