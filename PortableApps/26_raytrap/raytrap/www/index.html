@@ -1150,7 +1150,7 @@ async function setDiagOwner(owner){
   $('diag-owner-spinner').style.display = '';
   $('btn-owner-rh').disabled = true;
   $('btn-owner-ext').disabled = true;
-  const d = await api('diag.cgi',`action=diag_owner_set&owner=${owner}`);
+  const d = await api('diag.cgi', null, 'POST', `action=diag_owner_set&owner=${owner}`);
   if(!d.ok){ alert2('cap-alert','DIAG owner set failed: '+d.error,true); }
   // Wait for rayhunter to restart before refreshing
   await new Promise(r=>setTimeout(r,3500));
@@ -1190,6 +1190,19 @@ async function loadCapture(){
         `qcsuper --host-diag ${ifaces.wifi}:${sport} --wireshark-live`);
       streamUrlHtml('diag-url-adb','ADB Tunnel',
         `adb forward tcp:${sport} tcp:${sport} && qcsuper --host-diag 127.0.0.1:${sport} --wireshark-live`);
+    } else if(rh.debug_mode){
+      // External mode: rayhunter released /dev/diag — show QCSuper direct connect instructions
+      $('diag-stream-status').textContent = 'EXTERNAL';
+      $('diag-stream-status').className = 'val ok';
+      $('diag-stream-meta').textContent = 'QCSuper connects directly to /dev/diag';
+      $('diag-stream-urls').style.display = '';
+      $('diag-stream-pending').style.display = 'none';
+      streamUrlHtml('diag-url-rndis','USB DIAG (no ADB needed)',
+        `qcsuper --usb-diag`);
+      streamUrlHtml('diag-url-wifi','ADB DIAG',
+        `qcsuper --adb`);
+      streamUrlHtml('diag-url-adb','ADB pipe to Wireshark',
+        `adb shell "cat /dev/diag" | wireshark -k -i -`);
     } else {
       $('diag-stream-status').textContent = rh.running ? 'PENDING FORK' : 'UNAVAILABLE';
       $('diag-stream-status').className = 'val warn';
@@ -1253,7 +1266,7 @@ async function loadCapture(){
   }
 
   // Saved files
-  const files = cf.files || cs.files || [];
+  const files = cs.files || [];
   $('cap-files').innerHTML = files.length
     ? files.map(f=>`<div class="cap-file">
         <span class="fname">&#128190; ${f.name}</span>

@@ -107,8 +107,12 @@ if [ "$ACTION" = "status" ]; then
     # Stream port
     SPORT=$(stream_port)
 
-    printf '{"ok":true,"data":{"rayhunter":{"running":%s,"pid":%s,"port":%d,"fork_stream":%s},"interfaces":{"wifi":%s,"rndis":%s,"adb":%s},"stream_port":%d,"mask":' \
-        "$RH_RUNNING" "${RH_PID:-null}" "$RAYHUNTER_PORT" "$FORK_STREAM" \
+    # debug_mode — whether rayhunter is configured to skip /dev/diag (external mode)
+    DEBUG_MODE=false
+    grep -q '^debug_mode = true' /data/rayhunter/config.toml 2>/dev/null && DEBUG_MODE=true
+
+    printf '{"ok":true,"data":{"rayhunter":{"running":%s,"pid":%s,"port":%d,"fork_stream":%s,"debug_mode":%s},"interfaces":{"wifi":%s,"rndis":%s,"adb":%s},"stream_port":%d,"mask":' \
+        "$RH_RUNNING" "${RH_PID:-null}" "$RAYHUNTER_PORT" "$FORK_STREAM" "$DEBUG_MODE" \
         "$(jstr "$IP_WIFI")" "$(jstr "$IP_RNDIS")" "$(jstr "$IP_ADB")" \
         "$SPORT"
     mask_to_json
