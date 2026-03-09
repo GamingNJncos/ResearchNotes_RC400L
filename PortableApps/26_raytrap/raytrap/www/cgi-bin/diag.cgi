@@ -73,8 +73,8 @@ read_mask() {
         local defaults saved
         defaults=$(mask_default)
         saved=$(cat "$MASK_CONF" 2>/dev/null)
-        # Print defaults first, then saved — last value wins per key after dedup
-        printf '%s\n%s\n' "$defaults" "$saved" | \
+        # Print saved first (first occurrence wins in awk dedup), defaults fill missing keys
+        printf '%s\n%s\n' "$saved" "$defaults" | \
             awk -F= '!seen[$1]++{lines[NR]=$0; keys[NR]=$1} END{
                 for(i=1;i<=NR;i++) if(lines[i]) print lines[i]
             }' 2>/dev/null || { printf '%s\n' "$defaults"; }
