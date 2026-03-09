@@ -27,6 +27,15 @@ rayhunter-daemon-fork
 adb
 *_mockup.html
 
+# Root-level local scripts and config files (not RayTrap installation)
+device_config.xml
+fix_passwd.sh
+fix_ubireader.py
+reg.conf
+rh_build.sh
+rh_deploy.sh
+w_idle_debug.conf
+
 # Local system / editor artifacts
 *.pyc
 __pycache__/
