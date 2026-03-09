@@ -139,18 +139,22 @@ if [ "$ACTION" = "set_mask" ]; then
     mkdir -p "$(dirname "$MASK_CONF")" 2>/dev/null
     {
         for key in $KEYS; do
-            val=$(param "$key")
-            case "$val" in
-                1|true|on) printf '%s=1\n' "$key" ;;
-                *)          printf '%s=0\n' "$key" ;;
-            esac
+            if [ "$EN_ALL" = "true" ]; then
+                printf '%s=1\n' "$key"
+            else
+                val=$(param "$key")
+                case "$val" in
+                    1|true|on) printf '%s=1\n' "$key" ;;
+                    *)          printf '%s=0\n' "$key" ;;
+                esac
+            fi
         done
-        [ "$EN_ALL" = "true" ] && for key in $KEYS; do printf '%s=1\n' "$key"; done
     } > "$MASK_CONF"
 
     # Update config.toml [log_mask] section directly — wget can't reach rayhunter API
     # (Qualcomm LSM blocks socket() in CGI context). Keep everything before [log_mask],
     # then write fresh section. Rayhunter reads this on startup.
+    # IMPORTANT: write each key exactly once — TOML is strict about duplicate keys.
     TOML=/data/rayhunter/config.toml
     if [ -f "$TOML" ]; then
         BEFORE=$(awk '/^\[log_mask\]/{exit} {print}' "$TOML")
@@ -158,14 +162,16 @@ if [ "$ACTION" = "set_mask" ]; then
             printf '%s\n' "$BEFORE"
             printf '[log_mask]\n'
             for key in $KEYS; do
-                val=$(param "$key")
-                case "$val" in
-                    1|true|on) printf '%s = true\n' "$key" ;;
-                    *)          printf '%s = false\n' "$key" ;;
-                esac
+                if [ "$EN_ALL" = "true" ]; then
+                    printf '%s = true\n' "$key"
+                else
+                    val=$(param "$key")
+                    case "$val" in
+                        1|true|on) printf '%s = true\n' "$key" ;;
+                        *)          printf '%s = false\n' "$key" ;;
+                    esac
+                fi
             done
-            [ "$EN_ALL" = "true" ] && \
-                for key in $KEYS; do printf '%s = true\n' "$key"; done
             printf 'enable_all = %s\n' "$EN_ALL"
         } > "$TOML.new" && mv "$TOML.new" "$TOML"
     fi
