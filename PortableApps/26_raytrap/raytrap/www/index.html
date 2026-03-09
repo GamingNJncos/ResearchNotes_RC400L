@@ -1103,6 +1103,7 @@ async function saveMask(){
       ? 'Mask saved and applied to rayhunter'
       : 'Mask saved — will apply on rayhunter fork deployment';
     toast(msg);
+    loadCapture();
   } else {
     toast('Error: '+d.error, true);
   }
