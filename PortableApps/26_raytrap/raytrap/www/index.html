@@ -179,6 +179,17 @@ tr:hover td{background:#071520}
     <div class="svc-card"><div class="name">Active Rules</div><div class="val" id="dc-rules">—</div><div class="meta">ORBIC chains</div></div>
   </div>
   <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#9652; DIAG Owner</h3>
+      <span class="dim" id="dd-owner-status" style="font-size:11px">loading…</span>
+    </div>
+    <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn" id="dd-btn-owner-rh" onclick="setDiagOwner('rayhunter')">&#9679; rayhunter</button>
+      <button class="btn" id="dd-btn-owner-ext" onclick="setDiagOwner('external')">&#9679; External (QCSuper)</button>
+      <span id="dd-owner-spinner" style="display:none" class="dim">restarting…</span>
+    </div>
+  </div>
+  <div class="panel">
     <div class="panel-hdr"><h3>System</h3><button class="btn sm" onclick="loadDash()">&#8635; Refresh</button></div>
     <div class="panel-body">
       <table><tbody id="dash-sys"></tbody></table>
@@ -786,6 +797,7 @@ async function loadDash(){
     ['Kernel', s.kernel||'—'],
   ];
   $('dash-sys').innerHTML = rows.map(([k,v])=>`<tr><td class="dim">${k}</td><td>${v}</td></tr>`).join('');
+  loadDiagOwner(); // keep dashboard DIAG owner panel in sync
 }
 
 // ─── Firewall ─────────────────────────────────────────────────────────────────
@@ -1127,36 +1139,38 @@ function populateIfaceSelect(ifaces){
 
 async function loadDiagOwner(){
   const d = await api('diag.cgi','action=diag_owner_get');
-  if(!d.ok){ $('diag-owner-status').textContent = 'error: '+d.error; return; }
+  const statusTxt = d.ok
+    ? (d.data.diag_owner === 'free'
+        ? (d.data.debug_mode ? 'free — external mode' : 'free — rayhunter mode')
+        : `held by: ${d.data.diag_owner}`)
+    : 'error: '+d.error;
+  // Update both dashboard and capture panel elements
+  if($('diag-owner-status')) $('diag-owner-status').textContent = statusTxt;
+  if($('dd-owner-status'))   $('dd-owner-status').textContent   = statusTxt;
+  if(!d.ok) return;
   const owner = d.data.diag_owner || 'free';
   const dm    = d.data.debug_mode;
-  // owner string is process name or 'free'
-  const byRh  = owner.includes('rayhunter') || owner === 'free' && !dm;
+  const byRh  = owner.includes('rayhunter') || (owner === 'free' && !dm);
   const byExt = !byRh;
-  $('diag-owner-status').textContent = owner === 'free'
-    ? (dm ? 'free — external mode' : 'free — rayhunter mode')
-    : `held by: ${owner}`;
-  $('btn-owner-rh').className  = 'btn' + (byRh  ? ' active' : '');
-  $('btn-owner-ext').className = 'btn' + (byExt ? ' active' : '');
+  ['btn-owner-rh',  'dd-btn-owner-rh' ].forEach(id=>{ if($(id)) $(id).className = 'btn'+(byRh ?  ' active' : ''); });
+  ['btn-owner-ext', 'dd-btn-owner-ext'].forEach(id=>{ if($(id)) $(id).className = 'btn'+(byExt ? ' active' : ''); });
   const note = $('diag-owner-note');
-  if(dm){
-    note.textContent = 'External mode: rayhunter will NOT claim /dev/diag on restart. Connect QCSuper via USB DIAG or ADB DIAG tunnel.';
-  } else {
-    note.textContent = 'rayhunter mode: rayhunter holds /dev/diag for QMDL capture. QCSuper must use the rayhunter stream endpoint (fork required).';
-  }
+  if(note) note.textContent = dm
+    ? 'External mode: rayhunter will NOT claim /dev/diag on restart. Connect QCSuper via USB DIAG or ADB DIAG tunnel.'
+    : 'rayhunter mode: rayhunter holds /dev/diag for QMDL capture. QCSuper must use the rayhunter stream endpoint (fork required).';
 }
 
 async function setDiagOwner(owner){
-  $('diag-owner-spinner').style.display = '';
-  $('btn-owner-rh').disabled = true;
-  $('btn-owner-ext').disabled = true;
+  const allBtns = ['btn-owner-rh','btn-owner-ext','dd-btn-owner-rh','dd-btn-owner-ext'];
+  const allSpinners = ['diag-owner-spinner','dd-owner-spinner'];
+  allSpinners.forEach(id=>{ if($(id)) $(id).style.display = ''; });
+  allBtns.forEach(id=>{ if($(id)) $(id).disabled = true; });
   const d = await api('diag.cgi', null, 'POST', `action=diag_owner_set&owner=${owner}`);
   if(!d.ok){ alert2('cap-alert','DIAG owner set failed: '+d.error,true); }
   // Wait for rayhunter to restart before refreshing
   await new Promise(r=>setTimeout(r,3500));
-  $('diag-owner-spinner').style.display = 'none';
-  $('btn-owner-rh').disabled = false;
-  $('btn-owner-ext').disabled = false;
+  allSpinners.forEach(id=>{ if($(id)) $(id).style.display = 'none'; });
+  allBtns.forEach(id=>{ if($(id)) $(id).disabled = false; });
   await loadDiagOwner();
   await loadCapture();
 }

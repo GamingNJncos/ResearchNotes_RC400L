@@ -1222,6 +1222,15 @@ Static analysis of the Orbic `atfwd_daemon` (164 KB, ARM stripped ELF). Covers a
 
 </details>
 
+<details>
+<summary><strong>SideQuest: PinePhone Modem SDK — Cross-Pollination with RC400L</strong></summary>
+
+The PinePhone's Quectel EG25-G modem uses the same Qualcomm MDM9607 SoC as the RC400L. The Modem Distro project (open-source replacement firmware for EG25-G) exposes cellular capabilities the stock firmware hides — signal tracking, cell broadcast relay, GPS, engineering mode AT commands, and cpufreq tuning — all directly portable to the RC400L application processor without kernel changes.
+
+→ [SideQuests/PinePhone_Modem_SDK.md](SideQuests/PinePhone_Modem_SDK.md)
+
+</details>
+
 ---
 
 ## References

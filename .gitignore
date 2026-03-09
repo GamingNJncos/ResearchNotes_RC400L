@@ -16,6 +16,17 @@ Private_Research/*.doc
 # Device-specific binary blobs
 device_config
 
+# Compiled ARM binaries — not distributed
+rayhunter-daemon-fork
+
+# Capture files — potentially sensitive
+*.pcap
+*.pcapng
+
+# Local machine-specific convenience scripts and design mockups
+adb
+*_mockup.html
+
 # Local system / editor artifacts
 *.pyc
 __pycache__/
