@@ -137,11 +137,12 @@ listen 192.168.1.1
 port ${PORT:-8118}
 timeout ${TIMEOUT:-90}
 logfile "/cache/tinyproxy.log"
-loglevel ${LOGLEVEL:-Connect}
+loglevel ${LOGLEVEL:-connect}
 pidfile "/cache/tinyproxy.pid"
 maxclients ${MAXCLIENTS:-100}
+startservers 5
 minspareservers 2
-maxspareservers 5
+maxspareservers 10
 allow ${ALLOW:-192.168.1.0/24}
 disableviaheader yes
 CONF
