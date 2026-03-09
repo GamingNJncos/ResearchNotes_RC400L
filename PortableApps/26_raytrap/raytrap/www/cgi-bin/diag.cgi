@@ -32,6 +32,26 @@ ACTION=$(param action)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+# PID of running QCMAP_ConnectionManager, empty if not running
+qcmap_pid() {
+    ps 2>/dev/null | grep QCMAP_Connection | grep -v grep | awk '{print $1}' | head -1
+}
+
+# Ensure QCMAP is running; starts it via ipt_daemon FIFO if not.
+# Prints "started" or "running" to stdout.
+qcmap_ensure() {
+    local pid
+    pid=$(qcmap_pid)
+    if [ -n "$pid" ]; then
+        printf 'running'
+        return 0
+    fi
+    printf 'QCMAP_ConnectionManager /usrdata/data/qcmap/mobileap_cfg.xml d' > /cache/ipt/cmd.fifo 2>/dev/null
+    sleep 3
+    pid=$(qcmap_pid)
+    if [ -n "$pid" ]; then printf 'started'; else printf 'failed'; fi
+}
+
 # Get IP of a specific interface, empty string if not found/up
 iface_ip() {
     ip addr show "$1" 2>/dev/null | grep 'inet ' | head -1 | \
@@ -111,10 +131,14 @@ if [ "$ACTION" = "status" ]; then
     DEBUG_MODE=false
     grep -q '^debug_mode = true' /data/rayhunter/config.toml 2>/dev/null && DEBUG_MODE=true
 
-    printf '{"ok":true,"data":{"rayhunter":{"running":%s,"pid":%s,"port":%d,"fork_stream":%s,"debug_mode":%s},"interfaces":{"wifi":%s,"rndis":%s,"adb":%s},"stream_port":%d,"mask":' \
+    # QCMAP state
+    QCMAP_PID=$(qcmap_pid)
+    QCMAP_RUNNING=false; [ -n "$QCMAP_PID" ] && QCMAP_RUNNING=true
+
+    printf '{"ok":true,"data":{"rayhunter":{"running":%s,"pid":%s,"port":%d,"fork_stream":%s,"debug_mode":%s},"interfaces":{"wifi":%s,"rndis":%s,"adb":%s},"stream_port":%d,"qcmap":{"running":%s,"pid":%s},"mask":' \
         "$RH_RUNNING" "${RH_PID:-null}" "$RAYHUNTER_PORT" "$FORK_STREAM" "$DEBUG_MODE" \
         "$(jstr "$IP_WIFI")" "$(jstr "$IP_RNDIS")" "$(jstr "$IP_ADB")" \
-        "$SPORT"
+        "$SPORT" "$QCMAP_RUNNING" "${QCMAP_PID:-null}"
     mask_to_json
     printf '}}\n'
     exit 0
@@ -261,9 +285,54 @@ if [ "$ACTION" = "diag_owner_set" ]; then
     RUST_LOG=info /data/rayhunter/rayhunter-daemon /data/rayhunter/config.toml \
         >> /data/rayhunter/rayhunter.log 2>&1 &
 
+    # For external mode: ensure QCMAP is running so modem is in a connectable state
+    QCMAP_RESULT="n/a"
+    if [ "$OWNER" = "external" ]; then
+        QCMAP_RESULT=$(qcmap_ensure)
+    fi
+
     printf '{"ok":true,"data":{"owner":'
     jstr "$OWNER"
-    printf ',"debug_mode":%s,"restarting":true}}\n' "$NEW_MODE"
+    printf ',"debug_mode":%s,"restarting":true,"qcmap_result":%s}}\n' "$NEW_MODE" "$(jstr "$QCMAP_RESULT")"
+    exit 0
+fi
+
+# ── lte_control ────────────────────────────────────────────────────────────────
+# state=stop → AT+CFUN=4 (radio off / airplane mode)
+# state=start → AT+CFUN=1 (full functionality / radio on)
+# When starting, also ensures QCMAP is running first.
+if [ "$ACTION" = "lte_control" ]; then
+    STATE=$(param state)
+    case "$STATE" in
+        stop)  CFUN=4 ;;
+        start) CFUN=1 ;;
+        *) err "state must be 'start' or 'stop'"; exit 0 ;;
+    esac
+
+    QCMAP_RUNNING=false
+    QCMAP_PID=$(qcmap_pid)
+    [ -n "$QCMAP_PID" ] && QCMAP_RUNNING=true
+
+    # For LTE start: ensure QCMAP is up before turning the radio on
+    QCMAP_RESULT="n/a"
+    if [ "$STATE" = "start" ] && [ -z "$QCMAP_PID" ]; then
+        QCMAP_RESULT=$(qcmap_ensure)
+        QCMAP_PID=$(qcmap_pid)
+        [ -n "$QCMAP_PID" ] && QCMAP_RUNNING=true
+    fi
+
+    # Send AT+CFUN command via /dev/smd7
+    AT_OK=false
+    exec 3<>/dev/smd7 2>/dev/null
+    if [ $? -eq 0 ]; then
+        printf 'AT+CFUN=%d\r\n' "$CFUN" >&3
+        sleep 1
+        RESP=$(dd if=/dev/smd7 bs=128 count=1 2>/dev/null | tr -d '\r')
+        exec 3>&-
+        printf '%s' "$RESP" | grep -q 'OK' && AT_OK=true
+    fi
+
+    ok "{\"state\":\"$STATE\",\"cfun\":$CFUN,\"at_ok\":$AT_OK,\"qcmap_running\":$QCMAP_RUNNING,\"qcmap_result\":\"$QCMAP_RESULT\"}"
     exit 0
 fi
 

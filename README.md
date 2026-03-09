@@ -1,16 +1,21 @@
 # MDM9607 Down the Rabbit Hole: RC400L, Rayhunter, and Cross-Vendor Firmware Forensics
 
-> **Audience:** This is a living research document, not a polished tutorial. It's the unfiltered record of my process — wrong turns included. 
+> **Audience:** This is a living research document, not a polished tutorial. It's the unfiltered record of my process — wrong turns included.
+
+> **RayTrap** — browser-based control UI surfacing all capabilities built during this research (iptables, tcpdump, tinyproxy, wpa_supplicant, policy routing) behind a single web interface over ADB tunnel. → [RayTrap.md](RayTrap.md)
 
 ---
 
 ## Table of Contents
 
+### Phase 1 — Reconnaissance & Initial Access
 - [Why This Device?](#why-this-device)
 - [Step 1 — Pre-Purchase: FCC Docs and Internal Photos](#step-1--pre-purchase-fcc-docs-and-internal-photos)
 - [Step 2 — Digging Through Rayhunter's Codebase](#step-2--digging-through-rayhunters-codebase)
 - [Step 3 — How Does the Installer Actually Work?](#step-3--how-does-the-installer-actually-work)
 - [Step 4 — Serial Sorcery and AT+SYSCMD](#step-4--serial-sorcery-and-atsyscmd)
+
+### Phase 2 — Mapping the Attack Surface
 - [Step 5 — Hunting the Basics: Script Crawling](#step-5--hunting-the-basics-script-crawling)
 - [Step 6 — Chasing AT Commands](#step-6--chasing-at-commands)
 - [Step 7 — USB Modes, VID/PID, and a Mismatch](#step-7--usb-modes-vidpid-and-a-mismatch)
@@ -19,21 +24,32 @@
 - [Step 10 — Firmware Backup via EDL](#step-10--firmware-backup-via-edl)
 - [Step 11 — QCSuper, QPST, and EFS Explorer](#step-11--qcsuper-qpst-and-efs-explorer)
 - [Step 12 — AT Command Surface Area (AT+CLAC)](#step-12--at-command-surface-area-atclac)
+
+### Phase 3 — Cross-Vendor Firmware Forensics
 - [Pivoting: Why Look at the JMR540?](#pivoting-why-look-at-the-jmr540)
 - [Step 13 — Getting the JMR540 Firmware](#step-13--getting-the-jmr540-firmware)
 - [Step 14 — Platform Fingerprinting](#step-14--platform-fingerprinting)
 - [Step 15 — The Binary Audit (667 vs 569)](#step-15--the-binary-audit-667-vs-569)
 - [Step 16 — Key Findings by Category](#step-16--key-findings-by-category)
 - [Step 17 — Staging PortableApps for the RC400L](#step-17--staging-portableapps-for-the-rc400l)
-- [Step 18 — The TR-069 Rabbit Hole (cwmpCPE)](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
-- [Step 19 — The SMB Dead End](#step-19--the-smb-dead-end)
+
+### Phase 4 — Exploitation & Tool Development
+- [Step 18 — The TR-069 Rabbit Hole *(dead end)*](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
+- [Step 19 — The SMB Dead End *(dead end)*](#step-19--the-smb-dead-end)
 - [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
 - [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
 - [Step 22 — RayTrap: Unified Web Control Interface](#step-22--raytrap-unified-web-control-interface)
-- [Retrospective: What I'd Do Differently](#retrospective-what-id-do-differently)
-- [What's Next](#whats-next)
 
 ---
+
+- [Retrospective: What I'd Do Differently](#retrospective-what-id-do-differently)
+- [Side Quests](#side-quests)
+- [References](#references)
+- [Capability Achievements](#capability-achievements)
+
+---
+
+### Phase 1 — Reconnaissance & Initial Access
 
 ## Why This Device?
 
@@ -65,6 +81,122 @@ Fair warning: because "showing the process" is the goal, the flow can seem backw
 
 ---
 
+## Capability Achievements
+
+Each capability listed here was executed on live hardware during this research — not described hypothetically. The kill chain table maps demonstrated techniques to the specific steps where they appear in this document.
+
+| Kill Chain Phase | Framework | Technique | Demonstrated |
+|---|---|---|---|
+| Privilege Escalation | MITRE T1548 · T1037.004 | Linux capability ceiling bypass | Escaped `CapBnd=0x00c0` ADB ceiling via `once` entry injection into writable `/etc/inittab`; PID 1 spawns with `CapEff=0x3fffffffff` outside ADB process tree — [Step 20](#step-20--getting-tcpdump-working-escaping-the-capability-jail) |
+| Persistence | MITRE T1037.004 | RC script implant | All capabilities persist via `inittab respawn` entries — survive full device reboot without firmware modification — [Steps 20–21](#step-20--getting-tcpdump-working-escaping-the-capability-jail) |
+| Collection | MITRE T1040 | Network sniffing | tcpdump on `wlan0`/`bridge0` captures 802.11 management frames, probe requests, and client data to valid pcap — [Step 20](#step-20--getting-tcpdump-working-escaping-the-capability-jail) |
+| Collection | MITRE T1557 | Passive traffic duplication (TEE) | `iptables TEE` mirrors every WiFi client packet to a designated capture host — passive, no ARP poisoning, zero client visibility — [Step 21](#step-21--live-iptables-control-qcmap-safe-daemon-architecture) |
+| Collection | MITRE T1557 | Transparent intercept (REDIRECT/TPROXY) | `REDIRECT` silently forwards client port 80 to tinyproxy; `TPROXY` rule configured for TLS interception path — [Step 21](#step-21--live-iptables-control-qcmap-safe-daemon-architecture) |
+| Initial Access | MITRE T1599 | Network boundary bridging | Concurrent AP+STA on single radio: device serves WiFi clients while upstream-connected to a second network; full traffic visibility on both sides — [Step 21](#step-21--live-iptables-control-qcmap-safe-daemon-architecture) |
+| Credential Access | MITRE T1552.001 · OWASP WSTG-CRYPST-04 | Embedded credential recovery | RSA private key and IMEI-derived AES PSK extracted from stripped ARM ELF (`atfwd_daemon`, 164 KB) via static analysis — [Step 8](#step-8--atfwd-daemon-deep-dive) |
+| Defense Evasion | MITRE T1562.004 | Firewall bypass via chain insertion | Custom `ORBIC_*` chains inserted at position 1 in nat/mangle tables — before all QCMAP chains, which remain unmodified and functional — [Step 21](#step-21--live-iptables-control-qcmap-safe-daemon-architecture) |
+| Discovery | MITRE T1082 · T1005 | Firmware & platform enumeration | Full firmware extracted via EDL; cross-vendor binary inventory (RC400L vs JMR540, 667 vs 569 binaries) with ABI portability assessment — [Steps 9–16](#step-9--edl-and-fastboot-modes) |
+| Command & Control | MITRE T1219 | Operator interface (RayTrap) | Browser UI over ADB tunnel surfacing all capabilities point-and-click; boot-persistent, no shell required — [Step 22](#step-22--raytrap-unified-web-control-interface) |
+
+---
+
+### Achieving tcpdump — Escaping the Capability Jail
+
+Rayhunter gives you `uid=0` but `CapBnd=0x00c0` — only `CAP_SETUID` and `CAP_SETGID`. The entire ADB process tree inherits this ceiling. `tcpdump` needs `CAP_NET_RAW` (bit 13). Not present. Every socket call from rootshell returns `EPERM` due to a Qualcomm LSM hook that blocks `AF_PACKET` — and `AF_INET`, and `AF_UNIX` — from the ADB subtree entirely.
+
+The escape: `init` (PID 1) has `CapBnd=0x3fffffffff`. `/etc/inittab` is writable from rootshell. A `once` entry injected and signalled with `kill -HUP 1` causes init to spawn directly with full capabilities — outside the ADB process tree entirely.
+
+Result: tcpdump running with `CapEff=0x3fffffffff`, `PPid=1`, capturing live 802.11 management frames and client data on `wlan0`/`bridge0` to a valid pcap.
+
+**What this opens:**
+- Full layer-2 visibility of every device connecting to the Orbic hotspot — 802.11 management frames, probe requests with device SSIDs, association sequences
+- Passive identification of client devices and their preferred network lists before they even associate
+- Capture of unencrypted DNS queries, HTTP, and any plaintext protocol from connected clients
+- Baseline for correlating IMSI catcher activity (Rayhunter's purpose) against concurrent WiFi client behavior
+- The inittab escape itself is the general primitive — it unlocks the full capability set for any subsequent tool, not just tcpdump
+
+---
+
+### Integrating iptables — Mangle, NAT, and the FIFO Daemon
+
+The device already had `xtables-multi` and all xtables plugins compiled in (`TEE`, `REDIRECT`, `DNAT`, `TPROXY`, `MARK`, `CLASSIFY`, `CONNMARK`, 90+ others). The kernel tables were live. rootshell just couldn't touch them — `CAP_NET_ADMIN` is absent from `0x00c0`.
+
+The challenge beyond caps: QCMAP (Qualcomm's mobile AP manager) already owns iptables. It sets `INPUT`/`FORWARD` default `DROP`, manages port-forwarding chains, and handles NAT via QMI hardware offload — no `MASQUERADE` rule anywhere. Flushing everything to start fresh would instantly kill WiFi client internet access.
+
+The solution: a persistent `respawn` daemon (`ipdm:5:respawn`) running with full capabilities, listening on a named pipe at `/cache/ipt/cmd.fifo`. rootshell writes commands; the daemon executes them and writes output back. Custom chains (`ORBIC_PREROUTING`, `ORBIC_MANGLE`, `ORBIC_FILTER`) are inserted at position 1 in each table — before all QCMAP chains — and end with implicit `RETURN`. QCMAP never knows they exist.
+
+**What this opens:**
+
+*Traffic redirection:*
+- Any port from any WiFi client can be silently redirected to any local service. Port 777 → rayhunter's web UI. Port 80 → a custom tinyproxy instance for transparent HTTP interception. Port 443 → `TPROXY` for TLS MITM with a certificate proxy.
+- `DNAT` rules can forward client traffic destined for specific IPs to a different host entirely — redirect a client's DNS to a custom resolver, or forward a specific app's traffic to a capture server on the LAN.
+
+*Traffic duplication (TEE):*
+- The `TEE` module duplicates every packet to a configurable gateway IP. A laptop connected to the Orbic hotspot receives a bitwise copy of every packet from every WiFi client simultaneously — fully passive, no ARP poisoning, no TCP resets, zero visibility to clients. This is a hardware-accelerated version of what would normally require a managed switch with port mirroring.
+- Scope can be narrowed to a single client IP: capture one device while others are unaffected.
+
+*Traffic marking and QoS:*
+- `MARK` and `DSCP` rules in the mangle table let you tag specific flows for downstream policy routing — prioritize or deprioritize specific clients or protocols at the LTE uplink (`rmnet0`).
+- `CONNMARK` persists marks across a connection's lifetime, enabling stateful per-flow policies without per-packet matching overhead.
+
+*The broader implication:* Any device connecting to this hotspot is subject to arbitrary traffic manipulation — redirection, duplication, injection, or blocking — with no indication to the client. The Orbic presents itself as a normal LTE hotspot. There is no banner, no certificate warning, no behavioral change. The attack surface is every HTTP session, every DNS query, every protocol that doesn't do its own endpoint verification.
+
+---
+
+### Establishing Formal Shadow Authentication
+
+Orbic ships with root credentials stored as an MD5 crypt hash inline in `/etc/passwd` — no `/etc/shadow`, no shadow password suite, no `useradd`/`usermod`, no account management tooling of any kind. The busybox `su` and `login` applets work but have no shadow support.
+
+From the JMR540 firmware — same glibc, same platform — the full shadow-utils suite was extracted and confirmed zero-dependency portable. On deployment: `/etc/shadow` is created by migrating the existing hash from `/etc/passwd`, the passwd file is updated to `x`, and `/etc/login.defs` is installed. `su.shadow`, `passwd.shadow`, `login.shadow`, `useradd`, `usermod`, `groupadd`, and the full `shadow_extras` suite (`pwck`, `grpck`, `gpasswd`, `newusers`, `lastlog`, `faillog`, `chage`, etc.) all install to `/cache/bin/` and function correctly.
+
+**What this opens:**
+- Proper multi-user account management on a device that previously had one hardcoded root account
+- `passwd.shadow` can rotate the root credential without touching `/etc/passwd` directly — the credential lives in `/etc/shadow` with correct permissions (`640`, root-owned)
+- `useradd`/`usermod` enables creating unprivileged service accounts — running daemons as non-root where QCMAP or other system services don't require it
+- `faillog` and `lastlog` provide primitive audit capability — tracking login attempts on a device that previously had none
+- `chage` enables password aging policies, `logoutd` enables time-based login restrictions — neither meaningful in isolation on an embedded device, but both available to scripts that automate access control
+- The formal credential separation is a prerequisite for anything that wants to call `pam_unix` or link against `libshadow` — opening the path to PAM-aware services
+
+---
+
+### Integrating wpa_supplicant — Concurrent AP and STA Mode
+
+The assumption going in: single-radio device, `iw list` shows `#{ managed, AP } <= 1` in valid interface combinations — AP and managed can't coexist. This turned out to be wrong in practice. Using the iptables daemon as a `CAP_NET_ADMIN` proxy, `iw phy phy0 interface add wlan1 type managed` succeeds while `wlan0` is actively serving AP clients. The driver allows it; the nl80211 combination advertisement was either conservative or misread.
+
+`wpa_supplicant v2.3` (extracted from JMR540, zero extra dependencies) launches on `wlan1` via inittab escape with full capabilities. `wpa_cli` communicates through its control socket: `status`, `scan`, `add_network`, `set_network`, `enable_network`, `list_networks` all work correctly. One constraint: passive channel scanning returns empty while the AP is active — the radio cannot go off-channel to scan without disrupting AP clients. Networks must be configured directly by SSID and PSK; the supplicant will associate when it hears the target beacon on the current channel.
+
+**What this opens:**
+- The RC400L can simultaneously serve as an 802.11 AP for clients and connect as a STA to an upstream WiFi network — turning it into a transparent WiFi bridge or repeater without any upstream router involvement
+- Combined with the iptables mangle/NAT stack: traffic from clients on `bridge0`/`wlan0` can be routed through the `wlan1` STA uplink rather than `rmnet0` (LTE) — WiFi uplink with LTE fallback, or LTE uplink for selected clients and WiFi for others, all policy-routed via `MARK` rules
+- `wpa_supplicant` in STA mode authenticates with WPA2-Enterprise (PEAP, EAP-TLS) in addition to PSK — the device can join corporate or research lab networks that require certificate-based auth
+- A device that looks like a normal Orbic hotspot from the client side is actually upstream-connected to whatever network the operator chooses, with full traffic visibility and manipulation capability on both sides
+- The P2P-GO mode (also supported by the driver alongside AP) opens Wi-Fi Direct — the device can act as a P2P group owner for direct device-to-device transfers outside the normal AP/STA model
+- **The operational picture:** a $15 device on a SIM card, connected wirelessly to an upstream network it can monitor, serving a local hotspot it can manipulate, with packet capture and arbitrary iptables rules on both sides — deployed in a laptop bag or left on a table
+
+---
+
+### RayTrap — Unified Web Control Interface
+
+All prior capabilities — iptables manipulation, wpa_supplicant, tcpdump, tinyproxy, policy routing — shared one problem: they required shell access and command-line literacy to use. The FIFO daemon removed the capability constraint but not the friction. RayTrap packages all of it behind a browser UI accessible over ADB tunnel.
+
+The web server selection problem was itself illustrative. The device ships with a customized `thttpd` that validates `Host` headers (breaks ADB tunnel), remaps `-h` to `--help` (exits), and is already serving the admin panel on port 80. The correct answer was `busybox httpd` — a six-line invocation, no extra binary, no host header restriction, standard CGI. But it can't be launched from rootshell because the Qualcomm LSM blocks `socket()` from the ADB process subtree. The inittab escape that unlocked tcpdump in Step 20 unlocks httpd identically: a `once` entry via init, spawned with `CapEff=0x3fffffffff`, outside the ADB subtree entirely.
+
+The CGI layer is six shell scripts. The constraint: shell CGI has no standard URL-decoding library. `read -r` drops the final byte of a POST body when there's no trailing newline, silently discarding form fields. The fix (`printf '%s\n' "$1" | sed`) is a one-liner but the failure mode — missing data, no error — is exactly the kind of thing that wastes hours if you don't know to look for it.
+
+**What this opens:**
+
+- Everything the FIFO daemon, wpa_cli, tcpdump, tinyproxy, and ip rule could do is now accessible without knowing any syntax. A Mirror rule for Wireshark is three fields and a button. A transparent HTTP proxy is a toggle. A PCAP download is a link.
+- The access model (`adb forward tcp:8889 tcp:8888`) works from any OS without installing anything beyond adb. Browser as the only client requirement.
+- Boot persistence via misc-daemon means the UI is available within ~30 seconds of device power-on, before a rootshell session is even established. The device can be deployed, powered on remotely, and accessed with no further shell interaction.
+- Adding new capabilities — new CGI endpoints, new tools — requires only dropping a shell script in `cgi-bin/` and reloading. No recompilation, no firmware flash, no dependency chain.
+- The Capture tab, combined with the Firewall TEE mirror rule, creates a complete passive interception workflow from a browser: add a TEE rule targeting your laptop, start a tcpdump on bridge0, download the PCAP. The entire sequence is point-and-click with no command line.
+- **The net result:** the accumulated research from Steps 1–21 is now accessible to anyone with ADB access to the device — no embedded Linux expertise required, no memorized incantations, no rootshell one-liners. The device is operationally complete as a research platform.
+
+---
+
+<details>
+<summary><strong>Step 1 — Pre-Purchase: FCC Docs and Internal Photos</strong></summary>
+
 ## Step 1 — Pre-Purchase: FCC Docs and Internal Photos
 
 Before I bought anything I pulled the FCC filings. This is a habit I'd strongly recommend for any IoT/embedded research target — you can learn a lot about a device without ever touching it.
@@ -83,7 +215,12 @@ There's also what appears to be an unused RGB LED header. No idea if this is wir
 ![](assets/image37.png)
 ![](assets/image52.png)
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 2 — Digging Through Rayhunter's Codebase</strong></summary>
 
 ## Step 2 — Digging Through Rayhunter's Codebase
 
@@ -113,7 +250,12 @@ The high-level of what the Rayhunter installer does:
 
 That last bullet point is where things get interesting. *How* does it send AT commands before ADB is even available?
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 3 — How Does the Installer Actually Work?</strong></summary>
 
 ## Step 3 — How Does the Installer Actually Work?
 
@@ -136,7 +278,12 @@ The `wait_for_atfwd_daemon` call at the end of the install script is notable —
 
 ![](assets/image8.png)
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 4 — Serial Sorcery and AT+SYSCMD</strong></summary>
 
 ## Step 4 — Serial Sorcery and AT+SYSCMD
 
@@ -196,7 +343,14 @@ Grepping that log for `+SYSCMD` reveals the exact commands the Rayhunter install
 
 ![](assets/image35.png)
 
+</details>
+
 ---
+
+### Phase 2 — Mapping the Attack Surface
+
+<details>
+<summary><strong>Step 5 — Hunting the Basics: Script Crawling</strong></summary>
 
 ## Step 5 — Hunting the Basics: Script Crawling
 
@@ -213,7 +367,12 @@ One result that jumped out immediately: `DEBUG.sh`
 
 That sounds interesting. I noted it and moved on to chase the AT command angle first — then came back to it, because hunting scripts paid off in a different way than expected.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 6 — Chasing AT Commands</strong></summary>
 
 ## Step 6 — Chasing AT Commands
 
@@ -231,7 +390,12 @@ The scripts contain explicit references to modes `1` and `9`, with `echo` comman
 
 **Lesson:** When you're researching a device, the device often documents itself. Shell scripts in `/etc/init.d/`, `/etc/`, or scattered across `/data/` frequently contain exactly the information you're looking for — you just have to look.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 7 — USB Modes, VID/PID, and a Mismatch</strong></summary>
 
 ## Step 7 — USB Modes, VID/PID, and a Mismatch
 
@@ -265,7 +429,12 @@ The `boot_hsusb_composition` file also provides kernel notes on `/dev/diag` whic
 ![](assets/image51.png)
 ![](assets/image18.png)
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 8 — ATFWD Daemon Deep Dive</strong></summary>
 
 ## Step 8 — ATFWD Daemon Deep Dive
 
@@ -291,7 +460,12 @@ grep -i "registered AT" /data/logs/atfwd.log
 ![](assets/image38.png)
 ![](assets/image4.png)
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 9 — EDL and Fastboot Modes</strong></summary>
 
 ## Step 9 — EDL and Fastboot Modes
 
@@ -314,7 +488,12 @@ If you unplug the device mid-update (as described in that thread), Windows expos
 ![](assets/image36.png)
 ![](assets/image50.png)
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 10 — Firmware Backup via EDL</strong></summary>
 
 ## Step 10 — Firmware Backup via EDL
 
@@ -338,7 +517,12 @@ The partitions of interest for system-level research:
 
 The modem partition is worth a separate look if you're interested in the baseband — it's a completely separate RTOS running on the modem DSP, with its own filesystem.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 11 — QCSuper, QPST, and EFS Explorer</strong></summary>
 
 ## Step 11 — QCSuper, QPST, and EFS Explorer
 
@@ -379,7 +563,12 @@ Notable debug-related NV items:
 - `NV 4144` — Crash Debug Disallowed
 - `NV 4860` — DIAG FTM Mode Switch
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 12 — AT Command Surface Area (AT+CLAC)</strong></summary>
 
 ## Step 12 — AT Command Surface Area (AT+CLAC)
 
@@ -414,7 +603,11 @@ TR-069 reference docs also came up during this research. The RC400L has a `tr069
 ![](assets/image2.png)
 ![](assets/image3.png)
 
+</details>
+
 ---
+
+### Phase 3 — Cross-Vendor Firmware Forensics
 
 ## Pivoting: Why Look at the JMR540?
 
@@ -427,6 +620,9 @@ The research question: **What did Foxconn ship on JMR540 that Orbic/Verizon didn
 This is a common technique in embedded research — when you have limited capability on a target device, look at platform siblings. The ABI compatibility between devices using the same SoC, OS version, and C library version is often high enough that binaries are directly portable.
 
 ---
+
+<details>
+<summary><strong>Step 13 — Getting the JMR540 Firmware</strong></summary>
 
 ## Step 13 — Getting the JMR540 Firmware
 
@@ -449,7 +645,12 @@ C:\Users\<user>\AppData\Roaming\Python\Python314\Scripts\ubireader_extract_files
 Use the full path. Don't try to rely on it being in PATH on Windows Git Bash. I wasted time on this.
 
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 14 — Platform Fingerprinting</strong></summary>
 
 ## Step 14 — Platform Fingerprinting
 
@@ -479,7 +680,12 @@ Before doing any binary analysis, establish the ground truth on both platforms. 
 
 The Orbic stores root password directly in `/etc/passwd` as an MD5 hash — old-school, no shadow file. The JMR540 has a proper `/etc/shadow` setup with DES crypt hashes. This matters if you're trying to port the shadow suite tools: the Orbic doesn't have `/etc/shadow` at all, so you'd need to create it.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 15 — The Binary Audit (667 vs 569)</strong></summary>
 
 ## Step 15 — The Binary Audit (667 vs 569)
 
@@ -507,7 +713,12 @@ This converts the null-separated ELF string table into newlines and greps for sh
 - JMR540 (Foxconn): **667** bin/sbin entries
 - **131 unique-to-JMR540** binaries analyzed
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 16 — Key Findings by Category</strong></summary>
 
 ## Step 16 — Key Findings by Category
 
@@ -604,7 +815,12 @@ None of these exist on the Orbic, and pulling them all in would be a significant
 
 The `iperf`/`iperf3` presence on Orbic is genuinely useful and unexpected. The `mbimd` difference tells you something about the QMI vs MBIM interface choice — Foxconn went pure QMI, Orbic supports MBIM (which is what Windows prefers for USB modem interfaces).
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 17 — Staging PortableApps for the RC400L</strong></summary>
 
 ## Step 17 — Staging PortableApps for the RC400L
 
@@ -658,7 +874,14 @@ export PATH=/cache/bin:$PATH
 - `08_libpcap_tcpdump/tcpdump` — packet capture
 - `10_reg/reg` — register access
 
+</details>
+
 ---
+
+### Phase 4 — Exploitation & Tool Development
+
+<details>
+<summary><strong>Step 18 — The TR-069 Rabbit Hole (cwmpCPE) [dead end]</strong></summary>
 
 ## Step 18 — The TR-069 Rabbit Hole (cwmpCPE)
 
@@ -705,7 +928,12 @@ The Orbic already has its own `tr069` binary in its rootfs. That's worth investi
 
 A CWMP client running on the Orbic that dials home to an ISP ACS is a significant attack surface in both directions — the carrier has full remote control, and a malicious or compromised ACS could push arbitrary configuration changes or firmware. Understanding this attack surface is valuable for both offensive research and device hardening.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 19 — The SMB Dead End [dead end]</strong></summary>
 
 ## Step 19 — The SMB Dead End
 
@@ -719,7 +947,12 @@ This is a dead end for SMB without bringing a static `smbd` binary compiled for 
 
 **Lesson from this:** Just because a binary is named `modify_smbuser` doesn't mean SMB is implemented. Check the actual binary behavior before assuming functionality.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 20 — Getting tcpdump Working: Escaping the Capability Jail</strong></summary>
 
 ## Step 20 — Getting tcpdump Working: Escaping the Capability Jail
 
@@ -830,7 +1063,12 @@ Interface guide:
 
 The script handles the full flow: binary copy, inittab injection, init signal, process detection, wait loop, inittab restoration, and pull instructions.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture</strong></summary>
 
 ## Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture
 
@@ -983,7 +1221,12 @@ sh /data/tmp/xtables/deploy_xtables.sh
 
 The installer verifies xtables-multi, creates `/cache/ipt/`, installs and chmod's all scripts, patches inittab with the respawn entry, signals init, waits for the FIFO to appear, confirms full CapEff, and runs a smoke test showing the filter table. On any subsequent reboot the daemon comes up automatically — no re-deploy needed.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Step 22 — RayTrap: Unified Web Control Interface</strong></summary>
 
 ## Step 22 — RayTrap: Unified Web Control Interface
 
@@ -1131,6 +1374,8 @@ All files in `PortableApps/26_raytrap/`:
 | `raytrap/www/index.html` | Single-page web UI (~875 lines, vanilla JS) |
 | `raytrap/www/cgi-bin/*.cgi` | Six shell CGI scripts (status, firewall, proxy, wifi, routing, capture) |
 
+</details>
+
 ---
 
 ## Retrospective: What I'd Do Differently
@@ -1154,49 +1399,6 @@ There were a few moments where I started running commands without fully understa
 **Not everything that looks Foxconn-specific is Foxconn-specific.**
 
 Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not portable" turned out to be straightforwardly portable because they only depend on standard system libs. Conversely, some that looked generic (`simlock`, for example) turned out to have Foxconn-specific internal assumptions. The dep analysis tells you about library requirements but not about internal assumptions about filesystem layout or IPC topology.
-
----
-
-## What's Next
-
-**Confirmed done:**
-- [x] Deploy `00_audit/check_caps.sh` on live RC400L to confirm capability baseline
-- [x] Test `01_xtables/xtables-multi` — confirm iptables works on RC400L
-- [x] Inittab escape for full-caps process execution (tcpdump, iptables daemon)
-- [x] Deploy `01_xtables/deploy_xtables.sh` on live device — daemon running, CapEff=`0x3fffffffff`, persistent via inittab respawn
-- [x] ORBIC_PREROUTING and ORBIC_MANGLE chains live in nat/mangle tables, QCMAP untouched
-- [x] Port 777 → 8080 REDIRECT confirmed working via live rule injection
-- [x] Create `/etc/shadow` on RC400L — hash migrated from `/etc/passwd`, `/etc/passwd` updated to `x`
-- [x] Test `02_shadow_suite/su.shadow` — confirmed working with shadow credentials
-- [x] Deploy shadow-utils suite — `useradd`, `usermod`, `groupadd`, `passwd.shadow`, `chage`, `lastlog`, `faillog`, `pwck`, `gpasswd` all installed to `/cache/bin/`
-- [x] `wpa_supplicant` in concurrent AP+STA mode — `wlan1` (managed) running alongside `wlan0` (AP); `wpa_cli` status/scan/add_network confirmed; AP+managed concurrent mode verified by driver despite nl80211 combination advertisement suggesting otherwise
-- [x] Deploy all remaining PortableApps packages — `conntrackd`, `dbus-daemon`, UBI tools, `genl-ctrl-list`, traf-monitor, MCM framework, netlink QoS tools, and full shadow_extras installed to `/cache/bin/` and `/cache/lib/`
-- [x] `dbus-uuidgen`, `conntrackd`, `ubinfo`, `genl-ctrl-list`, `nl-cls-list`, `lastlog`, `pwck` all smoke-tested and confirmed working
-- [x] Deploy RayTrap web UI (PortableApps/26_raytrap) — busybox httpd on port 8888, 6 CGI endpoints (status, firewall, proxy, wifi, routing, capture), boot-persistent via misc-daemon patch, all tabs confirmed working
-
-**Immediate:**
-- [ ] TEE traffic mirroring — test with active WiFi client and Wireshark capture host on LAN (RayTrap Firewall → Mirror rule)
-- [ ] tinyproxy transparent HTTP — enable via RayTrap Proxy tab, confirm port 80 → 8118 REDIRECT and log capture
-- [ ] wpa_supplicant upstream connection — configure known SSID/PSK on `wlan1` via RayTrap WiFi tab, confirm association and routed traffic; scan returns empty while AP active (radio constraint) so target must be on same channel or pre-configured by SSID
-- [ ] MCM framework — start `mcm_ril_service` via inittab, test `MCM_ATCOP_CLI` and `uim_test_client` against live QMI stack
-- [ ] `dbus-daemon` — attempt direct launch from rootshell (AF_UNIX sockets may not be LSM-blocked); confirm `dbus-send`/`dbus-monitor` against running bus
-- [ ] Extract `libfwupgrade.so` from JMR540 and check its dependency chain
-- [ ] Examine JMR540 `/etc/cwmp/` config files for ACS URLs and credentials
-- [ ] Check Orbic's `tr069` binary for its configured ACS endpoint
-
-**Medium term:**
-- [ ] Set up GenieACS locally and attempt to point cwmpCPE at it
-- [ ] Investigate Orbic's `oma_dm` and `dmclient` — another remote management surface
-- [ ] Compare QMI command surface between RC400L and JMR540 (both use qmuxd)
-- [ ] QCSuper capture session — what does the modem send/receive at the DIAG level during normal operation?
-- [ ] Policy routing end-to-end — initialize tables via RayTrap Routing tab and confirm per-client LTE vs wlan1 STA routing works with wlan1 associated
-- [ ] Investigate the unused RGB LED — is it wired in firmware at all?
-
-**Longer term:**
-- [ ] Rust: contribute something to Rayhunter, or write a separate tool that uses the AT+SYSCMD channel
-- [ ] SIM7600 AT command cross-reference — map the delta between SIM7600 docs and actual RC400L AT responses
-- [ ] Static smbd for ARM/glibc-2.22 — viable? Worth the effort?
-- [ ] TPROXY rule for TLS interception — redirect port 443 to a local certificate proxy with `wpa_supplicant` upstream
 
 ---
 
@@ -1231,6 +1433,67 @@ The PinePhone's Quectel EG25-G modem uses the same Qualcomm MDM9607 SoC as the R
 
 </details>
 
+<details>
+<summary><strong>SideQuest: LCD Framebuffer — 128×128 RGB565 Display Control</strong></summary>
+
+128×128 RGB565 LCD panel via FBTFT (`/dev/fb0`). Covers the Qt Embedded 4.8.7 stock display stack, rayhunter's framebuffer takeover (ui_level modes, 1s refresh loop), raw RGB565 pixel format, and host-side tools (`PortableApps/27_lcd/`) for pushing arbitrary images to the screen over ADB.
+
+→ [SideQuests/LCD.md](SideQuests/LCD.md)
+
+</details>
+
+<details>
+<summary><strong>SideQuest: Rayhunter Fork — Boot Mask & DIAG Log Categories</strong></summary>
+
+Documents the rayhunter fork deployed on this RC400L: a reference table of all 14 DIAG log mask categories (mapped to actual Qualcomm log code IDs), what each captures on the MDM9607, and which are no-ops on this hardware. Covers the boot-default problem in stock rayhunter — masks were never applied in `debug_mode=true` — and the `Option<DiagDevice>` fix that seeds the modem mask at every startup regardless of operating mode.
+
+→ [SideQuests/Rayhunter_Fork.md](SideQuests/Rayhunter_Fork.md)
+
+</details>
+
+---
+
+## Navigation
+
+### Phase 1 — Reconnaissance & Initial Access
+- [Why This Device?](#why-this-device)
+- [Step 1 — Pre-Purchase: FCC Docs and Internal Photos](#step-1--pre-purchase-fcc-docs-and-internal-photos)
+- [Step 2 — Digging Through Rayhunter's Codebase](#step-2--digging-through-rayhunters-codebase)
+- [Step 3 — How Does the Installer Actually Work?](#step-3--how-does-the-installer-actually-work)
+- [Step 4 — Serial Sorcery and AT+SYSCMD](#step-4--serial-sorcery-and-atsyscmd)
+
+### Phase 2 — Mapping the Attack Surface
+- [Step 5 — Hunting the Basics: Script Crawling](#step-5--hunting-the-basics-script-crawling)
+- [Step 6 — Chasing AT Commands](#step-6--chasing-at-commands)
+- [Step 7 — USB Modes, VID/PID, and a Mismatch](#step-7--usb-modes-vidpid-and-a-mismatch)
+- [Step 8 — ATFWD Daemon Deep Dive](#step-8--atfwd-daemon-deep-dive)
+- [Step 9 — EDL and Fastboot Modes](#step-9--edl-and-fastboot-modes)
+- [Step 10 — Firmware Backup via EDL](#step-10--firmware-backup-via-edl)
+- [Step 11 — QCSuper, QPST, and EFS Explorer](#step-11--qcsuper-qpst-and-efs-explorer)
+- [Step 12 — AT Command Surface Area (AT+CLAC)](#step-12--at-command-surface-area-atclac)
+
+### Phase 3 — Cross-Vendor Firmware Forensics
+- [Pivoting: Why Look at the JMR540?](#pivoting-why-look-at-the-jmr540)
+- [Step 13 — Getting the JMR540 Firmware](#step-13--getting-the-jmr540-firmware)
+- [Step 14 — Platform Fingerprinting](#step-14--platform-fingerprinting)
+- [Step 15 — The Binary Audit (667 vs 569)](#step-15--the-binary-audit-667-vs-569)
+- [Step 16 — Key Findings by Category](#step-16--key-findings-by-category)
+- [Step 17 — Staging PortableApps for the RC400L](#step-17--staging-portableapps-for-the-rc400l)
+
+### Phase 4 — Exploitation & Tool Development
+- [Step 18 — The TR-069 Rabbit Hole *(dead end)*](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
+- [Step 19 — The SMB Dead End *(dead end)*](#step-19--the-smb-dead-end)
+- [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
+- [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
+- [Step 22 — RayTrap: Unified Web Control Interface](#step-22--raytrap-unified-web-control-interface)
+
+---
+
+- [Retrospective: What I'd Do Differently](#retrospective-what-id-do-differently)
+- [Side Quests](#side-quests)
+- [References](#references)
+- [Capability Achievements](#capability-achievements)
+
 ---
 
 ## References
@@ -1247,103 +1510,3 @@ The PinePhone's Quectel EG25-G modem uses the same Qualcomm MDM9607 SoC as the R
 ---
 
 *Research ongoing. This document is updated as findings develop.*
-
----
-
-## Capability Achievements
-
-A summary of what was actually unlocked on a $15 device running a narrowly-scoped IMSI catcher detector. Each capability either directly demonstrates a concrete security primitive or opens a specific class of research question that wasn't accessible before.
-
----
-
-### Achieving tcpdump — Escaping the Capability Jail
-
-Rayhunter gives you `uid=0` but `CapBnd=0x00c0` — only `CAP_SETUID` and `CAP_SETGID`. The entire ADB process tree inherits this ceiling. `tcpdump` needs `CAP_NET_RAW` (bit 13). Not present. Every socket call from rootshell returns `EPERM` due to a Qualcomm LSM hook that blocks `AF_PACKET` — and `AF_INET`, and `AF_UNIX` — from the ADB subtree entirely.
-
-The escape: `init` (PID 1) has `CapBnd=0x3fffffffff`. `/etc/inittab` is writable from rootshell. A `once` entry injected and signalled with `kill -HUP 1` causes init to spawn directly with full capabilities — outside the ADB process tree entirely.
-
-Result: tcpdump running with `CapEff=0x3fffffffff`, `PPid=1`, capturing live 802.11 management frames and client data on `wlan0`/`bridge0` to a valid pcap.
-
-**What this opens:**
-- Full layer-2 visibility of every device connecting to the Orbic hotspot — 802.11 management frames, probe requests with device SSIDs, association sequences
-- Passive identification of client devices and their preferred network lists before they even associate
-- Capture of unencrypted DNS queries, HTTP, and any plaintext protocol from connected clients
-- Baseline for correlating IMSI catcher activity (Rayhunter's purpose) against concurrent WiFi client behavior
-- The inittab escape itself is the general primitive — it unlocks the full capability set for any subsequent tool, not just tcpdump
-
----
-
-### Integrating iptables — Mangle, NAT, and the FIFO Daemon
-
-The device already had `xtables-multi` and all xtables plugins compiled in (`TEE`, `REDIRECT`, `DNAT`, `TPROXY`, `MARK`, `CLASSIFY`, `CONNMARK`, 90+ others). The kernel tables were live. rootshell just couldn't touch them — `CAP_NET_ADMIN` is absent from `0x00c0`.
-
-The challenge beyond caps: QCMAP (Qualcomm's mobile AP manager) already owns iptables. It sets `INPUT`/`FORWARD` default `DROP`, manages port-forwarding chains, and handles NAT via QMI hardware offload — no `MASQUERADE` rule anywhere. Flushing everything to start fresh would instantly kill WiFi client internet access.
-
-The solution: a persistent `respawn` daemon (`ipdm:5:respawn`) running with full capabilities, listening on a named pipe at `/cache/ipt/cmd.fifo`. rootshell writes commands; the daemon executes them and writes output back. Custom chains (`ORBIC_PREROUTING`, `ORBIC_MANGLE`, `ORBIC_FILTER`) are inserted at position 1 in each table — before all QCMAP chains — and end with implicit `RETURN`. QCMAP never knows they exist.
-
-**What this opens:**
-
-*Traffic redirection:*
-- Any port from any WiFi client can be silently redirected to any local service. Port 777 → rayhunter's web UI. Port 80 → a custom tinyproxy instance for transparent HTTP interception. Port 443 → `TPROXY` for TLS MITM with a certificate proxy.
-- `DNAT` rules can forward client traffic destined for specific IPs to a different host entirely — redirect a client's DNS to a custom resolver, or forward a specific app's traffic to a capture server on the LAN.
-
-*Traffic duplication (TEE):*
-- The `TEE` module duplicates every packet to a configurable gateway IP. A laptop connected to the Orbic hotspot receives a bitwise copy of every packet from every WiFi client simultaneously — fully passive, no ARP poisoning, no TCP resets, zero visibility to clients. This is a hardware-accelerated version of what would normally require a managed switch with port mirroring.
-- Scope can be narrowed to a single client IP: capture one device while others are unaffected.
-
-*Traffic marking and QoS:*
-- `MARK` and `DSCP` rules in the mangle table let you tag specific flows for downstream policy routing — prioritize or deprioritize specific clients or protocols at the LTE uplink (`rmnet0`).
-- `CONNMARK` persists marks across a connection's lifetime, enabling stateful per-flow policies without per-packet matching overhead.
-
-*The broader implication:* Any device connecting to this hotspot is subject to arbitrary traffic manipulation — redirection, duplication, injection, or blocking — with no indication to the client. The Orbic presents itself as a normal LTE hotspot. There is no banner, no certificate warning, no behavioral change. The attack surface is every HTTP session, every DNS query, every protocol that doesn't do its own endpoint verification.
-
----
-
-### Establishing Formal Shadow Authentication
-
-Orbic ships with root credentials stored as an MD5 crypt hash inline in `/etc/passwd` — no `/etc/shadow`, no shadow password suite, no `useradd`/`usermod`, no account management tooling of any kind. The busybox `su` and `login` applets work but have no shadow support.
-
-From the JMR540 firmware — same glibc, same platform — the full shadow-utils suite was extracted and confirmed zero-dependency portable. On deployment: `/etc/shadow` is created by migrating the existing hash from `/etc/passwd`, the passwd file is updated to `x`, and `/etc/login.defs` is installed. `su.shadow`, `passwd.shadow`, `login.shadow`, `useradd`, `usermod`, `groupadd`, and the full `shadow_extras` suite (`pwck`, `grpck`, `gpasswd`, `newusers`, `lastlog`, `faillog`, `chage`, etc.) all install to `/cache/bin/` and function correctly.
-
-**What this opens:**
-- Proper multi-user account management on a device that previously had one hardcoded root account
-- `passwd.shadow` can rotate the root credential without touching `/etc/passwd` directly — the credential lives in `/etc/shadow` with correct permissions (`640`, root-owned)
-- `useradd`/`usermod` enables creating unprivileged service accounts — running daemons as non-root where QCMAP or other system services don't require it
-- `faillog` and `lastlog` provide primitive audit capability — tracking login attempts on a device that previously had none
-- `chage` enables password aging policies, `logoutd` enables time-based login restrictions — neither meaningful in isolation on an embedded device, but both available to scripts that automate access control
-- The formal credential separation is a prerequisite for anything that wants to call `pam_unix` or link against `libshadow` — opening the path to PAM-aware services
-
----
-
-### Integrating wpa_supplicant — Concurrent AP and STA Mode
-
-The assumption going in: single-radio device, `iw list` shows `#{ managed, AP } <= 1` in valid interface combinations — AP and managed can't coexist. This turned out to be wrong in practice. Using the iptables daemon as a `CAP_NET_ADMIN` proxy, `iw phy phy0 interface add wlan1 type managed` succeeds while `wlan0` is actively serving AP clients. The driver allows it; the nl80211 combination advertisement was either conservative or misread.
-
-`wpa_supplicant v2.3` (extracted from JMR540, zero extra dependencies) launches on `wlan1` via inittab escape with full capabilities. `wpa_cli` communicates through its control socket: `status`, `scan`, `add_network`, `set_network`, `enable_network`, `list_networks` all work correctly. One constraint: passive channel scanning returns empty while the AP is active — the radio cannot go off-channel to scan without disrupting AP clients. Networks must be configured directly by SSID and PSK; the supplicant will associate when it hears the target beacon on the current channel.
-
-**What this opens:**
-- The RC400L can simultaneously serve as an 802.11 AP for clients and connect as a STA to an upstream WiFi network — turning it into a transparent WiFi bridge or repeater without any upstream router involvement
-- Combined with the iptables mangle/NAT stack: traffic from clients on `bridge0`/`wlan0` can be routed through the `wlan1` STA uplink rather than `rmnet0` (LTE) — WiFi uplink with LTE fallback, or LTE uplink for selected clients and WiFi for others, all policy-routed via `MARK` rules
-- `wpa_supplicant` in STA mode authenticates with WPA2-Enterprise (PEAP, EAP-TLS) in addition to PSK — the device can join corporate or research lab networks that require certificate-based auth
-- A device that looks like a normal Orbic hotspot from the client side is actually upstream-connected to whatever network the operator chooses, with full traffic visibility and manipulation capability on both sides
-- The P2P-GO mode (also supported by the driver alongside AP) opens Wi-Fi Direct — the device can act as a P2P group owner for direct device-to-device transfers outside the normal AP/STA model
-- **The operational picture:** a $15 device on a SIM card, connected wirelessly to an upstream network it can monitor, serving a local hotspot it can manipulate, with packet capture and arbitrary iptables rules on both sides — deployed in a laptop bag or left on a table
-
----
-
-### RayTrap — Unified Web Control Interface
-
-All prior capabilities — iptables manipulation, wpa_supplicant, tcpdump, tinyproxy, policy routing — shared one problem: they required shell access and command-line literacy to use. The FIFO daemon removed the capability constraint but not the friction. RayTrap packages all of it behind a browser UI accessible over ADB tunnel.
-
-The web server selection problem was itself illustrative. The device ships with a customized `thttpd` that validates `Host` headers (breaks ADB tunnel), remaps `-h` to `--help` (exits), and is already serving the admin panel on port 80. The correct answer was `busybox httpd` — a six-line invocation, no extra binary, no host header restriction, standard CGI. But it can't be launched from rootshell because the Qualcomm LSM blocks `socket()` from the ADB process subtree. The inittab escape that unlocked tcpdump in Step 20 unlocks httpd identically: a `once` entry via init, spawned with `CapEff=0x3fffffffff`, outside the ADB subtree entirely.
-
-The CGI layer is six shell scripts. The constraint: shell CGI has no standard URL-decoding library. `read -r` drops the final byte of a POST body when there's no trailing newline, silently discarding form fields. The fix (`printf '%s\n' "$1" | sed`) is a one-liner but the failure mode — missing data, no error — is exactly the kind of thing that wastes hours if you don't know to look for it.
-
-**What this opens:**
-
-- Everything the FIFO daemon, wpa_cli, tcpdump, tinyproxy, and ip rule could do is now accessible without knowing any syntax. A Mirror rule for Wireshark is three fields and a button. A transparent HTTP proxy is a toggle. A PCAP download is a link.
-- The access model (`adb forward tcp:8889 tcp:8888`) works from any OS without installing anything beyond adb. Browser as the only client requirement.
-- Boot persistence via misc-daemon means the UI is available within ~30 seconds of device power-on, before a rootshell session is even established. The device can be deployed, powered on remotely, and accessed with no further shell interaction.
-- Adding new capabilities — new CGI endpoints, new tools — requires only dropping a shell script in `cgi-bin/` and reloading. No recompilation, no firmware flash, no dependency chain.
-- The Capture tab, combined with the Firewall TEE mirror rule, creates a complete passive interception workflow from a browser: add a TEE rule targeting your laptop, start a tcpdump on bridge0, download the PCAP. The entire sequence is point-and-click with no command line.
-- **The net result:** the accumulated research from Steps 1–21 is now accessible to anyone with ADB access to the device — no embedded Linux expertise required, no memorized incantations, no rootshell one-liners. The device is operationally complete as a research platform.

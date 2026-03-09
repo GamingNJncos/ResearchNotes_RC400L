@@ -139,6 +139,10 @@ tr:hover td{background:#071520}
 .copy-btn{background:#0a1c2e;border:1px solid #1e3a5f;border-radius:2px;color:#3a8080;cursor:pointer;font-size:10px;padding:1px 6px;font-family:inherit;text-transform:none;letter-spacing:0;line-height:1.4}
 .copy-btn:hover{background:#1e3a5f;color:#00d4ff;border-color:#2a5080}
 
+/* Header nav icons */
+.hdr-icon{color:#3a6080;font-size:15px;line-height:1;text-decoration:none;transition:color .15s;padding:2px 1px}
+.hdr-icon:hover{color:#00d4ff}
+
 /* Misc */
 .dim{color:#3a6080;font-size:12px}
 .sep{border:none;border-top:1px solid #0d2035;margin:12px 0}
@@ -149,7 +153,9 @@ tr:hover td{background:#071520}
 
 <div id="hdr">
   <div class="brand">&#9655; RayTrap</div>
-  <div class="sub">RC400L Network Control &bull; 192.168.1.1:8888</div>
+  <a id="lnk-rayhunter" href="#" target="_blank" class="hdr-icon" title="Rayhunter">&#8962;</a>
+  <a id="lnk-orbic"     href="#" target="_blank" class="hdr-icon" title="Orbic Admin">&#9635;</a>
+  <div class="sub">192.168.1.1:8888</div>
   <div class="svc-dots">
     <span class="dot" id="ds-ipt"><span class="ind"></span>IPT</span>
     <span class="dot" id="ds-proxy"><span class="ind"></span>PROXY</span>
@@ -195,6 +201,22 @@ tr:hover td{background:#071520}
     <div class="panel-hdr"><h3>System</h3><button class="btn sm" onclick="loadDash()">&#8635; Refresh</button></div>
     <div class="panel-body">
       <table><tbody id="dash-sys"></tbody></table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr"><h3>&#9656; Device Links</h3></div>
+    <div class="panel-body">
+      <div class="form-row">
+        <label>Orbic Admin</label>
+        <input type="number" id="lnk-port-orbic" value="80" min="1" max="65535" style="width:80px" oninput="updateLinks()">
+        <span class="dim" id="lnk-url-orbic" style="font-size:11px"></span>
+      </div>
+      <div class="form-row">
+        <label>Rayhunter</label>
+        <input type="number" id="lnk-port-rh" value="8080" min="1" max="65535" style="width:80px" oninput="updateLinks()">
+        <span class="dim" id="lnk-url-rh" style="font-size:11px"></span>
+      </div>
+      <div class="dim" style="margin-top:6px">ADB users: <code>adb forward tcp:&lt;port&gt; tcp:&lt;device-port&gt;</code> to match.</div>
     </div>
   </div>
   <div class="panel">
@@ -470,6 +492,18 @@ tr:hover td{background:#071520}
         <span id="diag-owner-spinner" style="display:none" class="dim">restarting rayhunter…</span>
       </div>
       <div id="diag-owner-note" class="dim" style="font-size:11px;margin-top:8px"></div>
+      <!-- LTE radio + QCMAP control -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a3a">
+        <span class="dim" style="font-size:11px;min-width:32px">LTE:</span>
+        <button class="btn sm" id="btn-lte-stop"  onclick="lteControl('stop')">&#9632; Stop</button>
+        <button class="btn sm" id="btn-lte-start" onclick="lteControl('start')">&#9654; Start</button>
+        <span id="lte-ctrl-spinner" class="dim" style="display:none">…</span>
+        <span id="lte-ctrl-status" class="dim" style="font-size:11px"></span>
+        <span id="qcmap-status-badge" class="dim" style="font-size:11px;margin-left:auto"></span>
+      </div>
+      <div class="dim" style="font-size:10px;margin-top:5px;color:#666">
+        Workflow: set External &rarr; connect QCSuper &rarr; <strong>Stop LTE</strong> &rarr; <strong>Start LTE</strong> &rarr; captures full attach sequence from uplink
+      </div>
     </div>
   </div>
 
@@ -1065,12 +1099,18 @@ function copyStreamUrl(el){
   copyText(text.trim());
 }
 
+let _maskDirty = false;
+let _maskSaveTimer = null;
 function maskIndicatorDirty(){
-  $('mask-indicator').textContent = '● Unsaved changes';
+  _maskDirty = true;
+  $('mask-indicator').textContent = '● Saving…';
   $('mask-indicator').style.color = '#ffaa00';
+  clearTimeout(_maskSaveTimer);
+  _maskSaveTimer = setTimeout(()=>{ _maskSaveTimer = null; saveMask(); }, 1500);
 }
 function maskIndicatorClean(){
-  $('mask-indicator').textContent = '✓ Saved';
+  _maskDirty = false;
+  $('mask-indicator').textContent = '✓ Saved (persists at boot)';
   $('mask-indicator').style.color = '#00ff88';
 }
 
@@ -1100,6 +1140,7 @@ function applyMaskFromData(mask){
 }
 
 async function saveMask(){
+  clearTimeout(_maskSaveTimer); _maskSaveTimer = null;
   const params = {action: 'set_mask'};
   document.querySelectorAll('.mask-cb').forEach(cb=>{ params[cb.dataset.key] = cb.checked ? '1' : '0'; });
   if($('mask-all').checked) params.enable_all = '1';
@@ -1107,8 +1148,8 @@ async function saveMask(){
   if(d.ok){
     maskIndicatorClean();
     const msg = d.data && d.data.applied_to_rayhunter
-      ? 'Mask saved and applied to rayhunter'
-      : 'Mask saved — will apply on rayhunter fork deployment';
+      ? 'Mask saved to device — persists at boot'
+      : 'Mask saved — persists at boot (applies on rayhunter start)';
     toast(msg);
     loadCapture();
   } else {
@@ -1175,14 +1216,49 @@ async function setDiagOwner(owner){
   const allSpinners = ['diag-owner-spinner','dd-owner-spinner'];
   allSpinners.forEach(id=>{ if($(id)) $(id).style.display = ''; });
   allBtns.forEach(id=>{ if($(id)) $(id).disabled = true; });
+  if(owner === 'external'){
+    if($('lte-ctrl-status')) $('lte-ctrl-status').textContent = '';
+    if($('qcmap-status-badge')) $('qcmap-status-badge').textContent = 'checking QCMAP…';
+  }
   const d = await api('diag.cgi', null, 'POST', `action=diag_owner_set&owner=${owner}`);
   if(!d.ok){ alert2('cap-alert','DIAG owner set failed: '+d.error,true); }
+  if(d.ok && owner === 'external' && d.data && d.data.qcmap_result){
+    const r = d.data.qcmap_result;
+    updateQcmapBadge(r === 'running' || r === 'started', r);
+  }
   // Wait for rayhunter to restart before refreshing
   await new Promise(r=>setTimeout(r,3500));
   allSpinners.forEach(id=>{ if($(id)) $(id).style.display = 'none'; });
   allBtns.forEach(id=>{ if($(id)) $(id).disabled = false; });
   await loadDiagOwner();
   await loadCapture();
+}
+
+function updateQcmapBadge(running, detail){
+  const el = $('qcmap-status-badge');
+  if(!el) return;
+  const label = detail ? `QCMAP: ${detail}` : `QCMAP: ${running ? 'running' : 'stopped'}`;
+  el.textContent = label;
+  el.style.color  = running ? '#4caf50' : '#e57373';
+}
+
+async function lteControl(state){
+  ['btn-lte-stop','btn-lte-start'].forEach(id=>{ if($(id)) $(id).disabled = true; });
+  if($('lte-ctrl-spinner')) $('lte-ctrl-spinner').style.display = '';
+  if($('lte-ctrl-status')) $('lte-ctrl-status').textContent = state === 'stop' ? 'Stopping LTE…' : 'Starting LTE…';
+  const d = await api('diag.cgi', null, 'POST', `action=lte_control&state=${state}`);
+  if($('lte-ctrl-spinner')) $('lte-ctrl-spinner').style.display = 'none';
+  ['btn-lte-stop','btn-lte-start'].forEach(id=>{ if($(id)) $(id).disabled = false; });
+  if(d.ok){
+    const atOk = d.data && d.data.at_ok;
+    const msg = state === 'stop'
+      ? (atOk ? 'LTE stopped — radio off (AT+CFUN=4)' : 'AT+CFUN=4 sent (check modem state)')
+      : (atOk ? 'LTE started — radio on (AT+CFUN=1)'  : 'AT+CFUN=1 sent (check modem state)');
+    if($('lte-ctrl-status')) $('lte-ctrl-status').textContent = msg;
+    if(d.data) updateQcmapBadge(d.data.qcmap_running, null);
+  } else {
+    if($('lte-ctrl-status')) $('lte-ctrl-status').textContent = 'Error: '+(d.error || 'unknown');
+  }
 }
 
 async function loadCapture(){
@@ -1245,11 +1321,16 @@ async function loadCapture(){
     $('diag-mask-summary').textContent = `${onCount} / ${total}`;
     $('diag-mask-meta').textContent = 'categories enabled';
 
-    // Apply mask toggles
-    applyMaskFromData(mask);
-    maskIndicatorClean();
+    // Apply mask toggles — skip if user has unsaved changes pending
+    if(!_maskDirty){
+      applyMaskFromData(mask);
+      maskIndicatorClean();
+    }
 
     setDot('ds-cap', rh.running ? 'ok' : 'warn');
+
+    // QCMAP badge
+    if(dd.data.qcmap) updateQcmapBadge(dd.data.qcmap.running, null);
   }
 
   // Load tcpdump status
@@ -1347,6 +1428,31 @@ document.querySelectorAll('.mask-cb').forEach(cb=>{
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+// ─── Device Links ─────────────────────────────────────────────────────────────
+
+function updateLinks(){
+  var h = window.location.hostname;
+  var op = $('lnk-port-orbic').value || '80';
+  var rp = $('lnk-port-rh').value    || '8080';
+  var orbicUrl = 'http://'+h+(op==='80'?'':':'+op)+'/';
+  var rhUrl    = 'http://'+h+':'+rp+'/';
+  $('lnk-orbic').href     = orbicUrl;
+  $('lnk-rayhunter').href = rhUrl;
+  $('lnk-url-orbic').textContent = orbicUrl;
+  $('lnk-url-rh').textContent    = rhUrl;
+  localStorage.setItem('rt_orbic_port', op);
+  localStorage.setItem('rt_rh_port',    rp);
+}
+
+function initLinks(){
+  var op = localStorage.getItem('rt_orbic_port') || '80';
+  var rp = localStorage.getItem('rt_rh_port')    || '8080';
+  $('lnk-port-orbic').value = op;
+  $('lnk-port-rh').value    = rp;
+  updateLinks();
+}
+
+initLinks();
 loadDash();
 setInterval(()=>{
   const active = document.querySelector('.tab-content.active');

@@ -13,28 +13,19 @@ Private_Research/*.doc
 # Local IDE/assistant session files
 .claude/
 
-# Device-specific binary blobs
-device_config
+# AT command fuzzing research — private, not for public repo
+Private_Research/at_fuzz/
 
-# Compiled ARM binaries — not distributed
-rayhunter-daemon-fork
+# ALL local operational files: scripts, scratch, device config, binaries
+# Add new local files here — never add them to root
+Local/
+
+# Third-party tool installs
+qcsuper/
 
 # Capture files — potentially sensitive
 *.pcap
 *.pcapng
-
-# Local machine-specific convenience scripts and design mockups
-adb
-*_mockup.html
-
-# Root-level local scripts and config files (not RayTrap installation)
-device_config.xml
-fix_passwd.sh
-fix_ubireader.py
-reg.conf
-rh_build.sh
-rh_deploy.sh
-w_idle_debug.conf
 
 # Local system / editor artifacts
 *.pyc
@@ -43,11 +34,15 @@ __pycache__/
 Thumbs.db
 
 # Allow source link files and deploy/control scripts within ignored dirs
-\!PortableApps/**/SOURCES.txt
-\!PortableApps/**/*.sh
+!PortableApps/**/SOURCES.txt
+!PortableApps/**/*.sh
+!PortableApps/**/*.py
 
-# Allow RayTrap web UI (26_raytrap) — shell CGI scripts, HTML, and init script
-\!PortableApps/26_raytrap/**/*.cgi
-\!PortableApps/26_raytrap/**/index.html
-\!PortableApps/26_raytrap/**/raytrap_daemon
-\!PortableApps/26_raytrap/**/tinyproxy.conf
+# Allow RayTrap web UI (26_raytrap) — CGI scripts, HTML, init script, build scripts, patched source
+!PortableApps/26_raytrap/**/*.cgi
+!PortableApps/26_raytrap/**/index.html
+!PortableApps/26_raytrap/**/raytrap_daemon
+!PortableApps/26_raytrap/**/tinyproxy.conf
+!PortableApps/26_raytrap/rh_build.sh
+!PortableApps/26_raytrap/rh_deploy.sh
+!PortableApps/26_raytrap/rayhunter_fork/daemon/src/main.rs
