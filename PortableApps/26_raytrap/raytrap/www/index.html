@@ -309,8 +309,8 @@ tr:hover td{background:#071520}
   <div class="panel">
     <div class="panel-hdr"><h3>Control</h3></div>
     <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn success" onclick="proxyAction('start')">&#9654; Start tinyproxy</button>
-      <button class="btn danger" onclick="proxyAction('stop')">&#9646;&#9646; Stop tinyproxy</button>
+      <button class="btn" id="px-start-btn" onclick="proxyAction('start')">&#9654; Start tinyproxy</button>
+      <button class="btn" id="px-stop-btn" onclick="proxyAction('stop')">&#9646;&#9646; Stop tinyproxy</button>
       <button class="btn" onclick="loadProxy()">&#8635; Refresh Status</button>
     </div>
   </div>
@@ -891,6 +891,8 @@ async function loadProxy(){
   $('px-transparent').className = 'val '+(s.transparent?'ok':'off');
   $('px-transp-toggle').checked = !!s.transparent;
   $('px-transp-label').textContent = s.transparent ? 'Enabled' : 'Disabled';
+  $('px-start-btn').className = 'btn' + (s.running ? '' : ' success');
+  $('px-stop-btn').className  = 'btn' + (s.running ? ' danger' : '');
   loadProxyLog();
 }
 

@@ -61,7 +61,7 @@ EOF
 
     # Raw dump for display
     RAW=$(ip rule show 2>/dev/null; echo "---"; ip route show table 100 2>/dev/null | sed 's/^/table100: /'; ip route show table 200 2>/dev/null | sed 's/^/table200: /')
-    RAW_ESC=$(echo "$RAW" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' '|' | sed 's/|/\\n/g')
+    RAW_ESC=$(echo "$RAW" | tr '\t' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' '|' | sed 's/|/\\n/g')
 
     printf '{"ok":true,"data":{"rules":[%s],"raw":"%s"}}\n' "$RULES" "$RAW_ESC"
     exit 0

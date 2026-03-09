@@ -133,17 +133,17 @@ if [ "$ACTION" = "set_config" ]; then
 
     cat > "$CONF" << CONF
 # tinyproxy.conf — RayTrap managed config
-Listen 192.168.1.1
-Port ${PORT:-8118}
-Timeout ${TIMEOUT:-90}
-LogFile /cache/tinyproxy.log
-LogLevel ${LOGLEVEL:-Connect}
-PidFile /cache/tinyproxy.pid
-MaxClients ${MAXCLIENTS:-100}
-MinSpareServers 2
-MaxSpareServers 5
-Allow ${ALLOW:-192.168.1.0/24}
-DisableViaHeader Yes
+listen 192.168.1.1
+port ${PORT:-8118}
+timeout ${TIMEOUT:-90}
+logfile "/cache/tinyproxy.log"
+loglevel ${LOGLEVEL:-Connect}
+pidfile "/cache/tinyproxy.pid"
+maxclients ${MAXCLIENTS:-100}
+minspareservers 2
+maxspareservers 5
+allow ${ALLOW:-192.168.1.0/24}
+disableviaheader yes
 CONF
 
     ok '"saved"'
