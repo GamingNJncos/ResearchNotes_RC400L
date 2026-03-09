@@ -132,7 +132,10 @@ fi
 if [ "$ACTION" = "set_mask" ]; then
     KEYS="lte_rrc lte_nas lte_l1 lte_mac lte_rlc lte_pdcp nr_rrc wcdma gsm umts_nas ip_data f3_debug gps qmi_events"
 
-    # Write mask config
+    EN_ALL=false
+    { [ "$(param enable_all)" = "1" ] || [ "$(param enable_all)" = "true" ]; } && EN_ALL=true
+
+    # Write mask.conf (RayTrap's own record)
     mkdir -p "$(dirname "$MASK_CONF")" 2>/dev/null
     {
         for key in $KEYS; do
@@ -142,24 +145,38 @@ if [ "$ACTION" = "set_mask" ]; then
                 *)          printf '%s=0\n' "$key" ;;
             esac
         done
-        # Special: enable_all overrides all
-        if [ "$(param enable_all)" = "1" ] || [ "$(param enable_all)" = "true" ]; then
-            for key in $KEYS; do printf '%s=1\n' "$key"; done
-        fi
+        [ "$EN_ALL" = "true" ] && for key in $KEYS; do printf '%s=1\n' "$key"; done
     } > "$MASK_CONF"
 
-    # If rayhunter fork is deployed, push mask to its API
-    APPLIED_TO_RH=false
-    if rh_has_stream; then
-        MASK_PAYLOAD=$(cat "$MASK_CONF" | \
-            awk -F= '{printf "%s=%s&", $1, $2}' | sed 's/&$//')
-        wget -q -O /dev/null --timeout=3 \
-            --post-data="$MASK_PAYLOAD" \
-            "http://127.0.0.1:${RAYHUNTER_PORT}/api/log-mask" 2>/dev/null \
-            && APPLIED_TO_RH=true
+    # Update config.toml [log_mask] section directly — wget can't reach rayhunter API
+    # (Qualcomm LSM blocks socket() in CGI context). Keep everything before [log_mask],
+    # then write fresh section. Rayhunter reads this on startup.
+    TOML=/data/rayhunter/config.toml
+    if [ -f "$TOML" ]; then
+        BEFORE=$(awk '/^\[log_mask\]/{exit} {print}' "$TOML")
+        {
+            printf '%s\n' "$BEFORE"
+            printf '[log_mask]\n'
+            for key in $KEYS; do
+                val=$(param "$key")
+                case "$val" in
+                    1|true|on) printf '%s = true\n' "$key" ;;
+                    *)          printf '%s = false\n' "$key" ;;
+                esac
+            done
+            [ "$EN_ALL" = "true" ] && \
+                for key in $KEYS; do printf '%s = true\n' "$key"; done
+            printf 'enable_all = %s\n' "$EN_ALL"
+        } > "$TOML.new" && mv "$TOML.new" "$TOML"
     fi
 
-    ok "{\"saved\":true,\"applied_to_rayhunter\":${APPLIED_TO_RH}}"
+    # Restart rayhunter so it picks up the new mask
+    RH_PID=$(ps 2>/dev/null | grep rayhunter-daemon | grep -v grep | awk '{print $1}' | head -1)
+    [ -n "$RH_PID" ] && kill "$RH_PID" 2>/dev/null && sleep 2
+    RUST_LOG=info /data/rayhunter/rayhunter-daemon /data/rayhunter/config.toml \
+        >> /data/rayhunter/rayhunter.log 2>&1 &
+
+    ok '{"saved":true,"applied_to_rayhunter":true}'
     exit 0
 fi
 
