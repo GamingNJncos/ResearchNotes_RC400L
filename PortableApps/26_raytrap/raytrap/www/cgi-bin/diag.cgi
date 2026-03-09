@@ -233,7 +233,7 @@ if [ "$ACTION" = "diag_owner_set" ]; then
     # Direct kill leaves /tmp/rayhunter.pid stale — start-stop-daemon would refuse to restart.
     # Use stop+start rather than restart: restart has set -e and aborts if stop returns non-zero
     # (e.g. rayhunter not running). stop is allowed to fail here.
-    /etc/init.d/rayhunter_daemon stop 2>/dev/null; /etc/init.d/rayhunter_daemon start 2>/dev/null
+    /etc/init.d/rayhunter_daemon stop >/dev/null 2>&1; /etc/init.d/rayhunter_daemon start >/dev/null 2>&1
 
     printf '{"ok":true,"data":{"owner":'
     jstr "$OWNER"
