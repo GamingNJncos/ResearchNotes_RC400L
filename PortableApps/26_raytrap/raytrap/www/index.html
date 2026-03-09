@@ -70,6 +70,7 @@ tr:hover td{background:#071520}
 .btn{background:#0a1628;border:1px solid #1e3a5f;color:#8ab4d4;padding:5px 12px;border-radius:3px;transition:all .15s}
 .btn:hover{border-color:#00d4ff;color:#00d4ff}
 .btn.danger{border-color:#5f1e1e;color:#ff4444}
+.btn.active{border-color:#00d4ff;color:#00d4ff;background:#0a2040}
 .btn.danger:hover{background:#3a0a0a;border-color:#ff4444}
 .btn.primary{border-color:#00d4ff;color:#00d4ff}
 .btn.primary:hover{background:#0a2030}
@@ -112,10 +113,29 @@ tr:hover td{background:#071520}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Capture */
-.cap-file{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #071018}
+.cap-file{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #071018;gap:8px}
 .cap-file:last-child{border-bottom:none}
-.cap-file .fname{color:#8ab4d4;font-size:12px}
-.cap-file .fsize{color:#3a6080;font-size:11px}
+.cap-file .fname{color:#8ab4d4;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-file .fsize{color:#3a6080;font-size:11px;white-space:nowrap}
+
+/* Mask grid */
+.mask-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:6px;margin-bottom:12px}
+.mask-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid #0d2035;border-radius:3px;background:#071018}
+.mask-row:hover{border-color:#1e3a5f}
+.mask-row.master{border-color:#1e3a5f;background:#091420}
+.mask-info{flex:1;min-width:0}
+.mask-label{color:#8ab4d4;font-size:13px;display:block;margin-bottom:2px}
+.mask-codes{color:#2a5070;font-size:11px}
+.mask-vol{font-size:10px;padding:1px 5px;border-radius:2px;white-space:nowrap;align-self:center}
+.vol-low{background:#0a2018;color:#00aa55;border:1px solid #1a4030}
+.vol-med{background:#1a1800;color:#aaaa00;border:1px solid #3a3010}
+.vol-high{background:#200a00;color:#ff7700;border:1px solid #5f2a00}
+.vol-vhigh{background:#200000;color:#ff4444;border:1px solid #5f0000}
+
+/* Stream URL boxes */
+.stream-url{background:#040608;border:1px solid #0d2035;border-radius:3px;padding:7px 10px;font-size:12px;color:#00d4ff;word-break:break-all;margin-bottom:5px;cursor:pointer;user-select:all}
+.stream-url:hover{border-color:#1e3a5f}
+.stream-url .slabel{color:#3a6080;font-size:10px;display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:1px}
 
 /* Misc */
 .dim{color:#3a6080;font-size:12px}
@@ -423,64 +443,244 @@ tr:hover td{background:#071520}
 <section id="tab-capture" class="tab-content">
   <div id="cap-alert"></div>
 
+  <!-- ── DIAG Owner Toggle ──────────────────────────────────────────────── -->
   <div class="panel">
-    <div class="panel-hdr"><h3>Start Capture</h3></div>
+    <div class="panel-hdr">
+      <h3>&#9652; DIAG Device Owner</h3>
+      <span class="dim" id="diag-owner-status" style="font-size:11px">loading...</span>
+    </div>
     <div class="panel-body">
+      <p class="dim" style="margin:0 0 10px">Only one process may hold <code>/dev/diag</code> at a time. Switch ownership to match your capture workflow — rayhunter restarts automatically.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="btn-owner-rh" onclick="setDiagOwner('rayhunter')">&#9679; rayhunter (QMDL)</button>
+        <button class="btn" id="btn-owner-ext" onclick="setDiagOwner('external')">&#9679; External (QCSuper / USB DIAG)</button>
+        <span id="diag-owner-spinner" style="display:none" class="dim">restarting rayhunter…</span>
+      </div>
+      <div id="diag-owner-note" class="dim" style="font-size:11px;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- ── DIAG Modem Capture ─────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#9685; DIAG Modem Capture</h3>
+      <button class="btn sm" onclick="loadCapture()">&#8635; Refresh</button>
+    </div>
+    <div class="panel-body">
+      <div class="svc-grid" style="margin-bottom:12px">
+        <div class="svc-card"><div class="name">Rayhunter</div><div class="val off" id="diag-rh-status">—</div><div class="meta" id="diag-rh-meta"></div></div>
+        <div class="svc-card"><div class="name">DIAG Stream</div><div class="val off" id="diag-stream-status">—</div><div class="meta" id="diag-stream-meta"></div></div>
+        <div class="svc-card"><div class="name">Stream Port</div><div class="val" id="diag-port">—</div><div class="meta">all interfaces</div></div>
+        <div class="svc-card"><div class="name">Mask</div><div class="val" id="diag-mask-summary">—</div><div class="meta" id="diag-mask-meta"></div></div>
+      </div>
+
+      <!-- Stream URLs — populated dynamically from detected interface IPs -->
+      <div id="diag-stream-urls" style="display:none">
+        <p class="dim" style="margin-bottom:8px">Connect QCSuper or Wireshark to any endpoint — all interfaces served simultaneously:</p>
+        <div class="stream-url" id="diag-url-rndis" onclick="copyStreamUrl(this)"></div>
+        <div class="stream-url" id="diag-url-wifi" onclick="copyStreamUrl(this)"></div>
+        <div class="stream-url" id="diag-url-adb" onclick="copyStreamUrl(this)"></div>
+        <div class="form-help" style="margin-top:4px">&#9432; Click to copy. Stream active until stopped. Clients may connect/disconnect freely.</div>
+      </div>
+      <div id="diag-stream-pending" class="dim" style="margin-bottom:8px;display:none">
+        &#9888; Live stream requires rayhunter fork deployment. Mask config is saved and will apply on deployment.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DIAG Log Mask ──────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>DIAG Log Mask</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="dim" id="mask-indicator" style="font-size:11px">loading...</span>
+        <button class="btn sm primary" onclick="saveMask()">Apply Mask</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <p class="dim" style="margin-bottom:12px">Controls which log code categories are requested from the modem DIAG interface. Volume shows approximate data rate impact at idle LTE. Changes apply immediately to any active stream.</p>
+
+      <!-- Master toggle -->
+      <div class="mask-row master" style="margin-bottom:10px">
+        <label class="toggle"><input type="checkbox" id="mask-all" onchange="maskToggleAll(this.checked)"><span class="toggle-slider"></span></label>
+        <div class="mask-info" style="flex:1">
+          <span class="mask-label" style="color:#00d4ff">&#9733; Enable All Log Codes</span>
+          <div class="mask-codes">Sets all bits — captures everything the modem emits</div>
+        </div>
+        <span class="mask-vol vol-vhigh">VERY HIGH</span>
+      </div>
+
+      <div class="mask-grid">
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_rrc"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE RRC</span><div class="mask-codes">0xb0c0 &bull; Connection setup/release, handover, SIBs, RRC reconfig</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_nas"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE NAS</span><div class="mask-codes">0xb0e2/e3/ec/ed &bull; Attach, auth, EMM/ESM messages in+out</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_l1"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE L1 Physical Layer</span><div class="mask-codes">0xb17e+ &bull; RSRP/RSRQ/SINR per subframe, MCS, HARQ, channel estimates</div></div>
+          <span class="mask-vol vol-high">HIGH</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_mac"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE MAC</span><div class="mask-codes">0xb064+ &bull; DL/UL scheduling grants, RACH, random access response</div></div>
+          <span class="mask-vol vol-med">MED</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_rlc"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE RLC</span><div class="mask-codes">0xb088+ &bull; Segmentation, retransmission, ARQ, status PDUs</div></div>
+          <span class="mask-vol vol-med">MED</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="lte_pdcp"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">LTE PDCP</span><div class="mask-codes">0xb0a0+ &bull; Ciphering events, header compression, sequence numbers</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="nr_rrc"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">NR / 5G RRC</span><div class="mask-codes">0xb821 &bull; 5G NR radio resource control OTA messages</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="wcdma"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">WCDMA Signaling</span><div class="mask-codes">0x412f &bull; 3G RRC, RLC, MAC signaling messages</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="gsm"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">GSM / GPRS</span><div class="mask-codes">0x512f 0x5226 &bull; 2G RR signaling, MAC control messages</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="umts_nas"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">UMTS NAS</span><div class="mask-codes">0x713a &bull; 3G GMM/SM messages, mobility management</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="ip_data"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">IP Data Logging</span><div class="mask-codes">0x11eb &bull; Raw IP packet logging at modem data path boundary</div></div>
+          <span class="mask-vol vol-high">HIGH</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="f3_debug"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">F3 Debug Messages &#9888;</span><div class="mask-codes">All subsystems &bull; Modem-side printf from Hexagon DSP — verbose, baseband debugging</div></div>
+          <span class="mask-vol vol-vhigh">VERY HIGH</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="gps"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">GPS / GNSS Engine</span><div class="mask-codes">0x1370+ &bull; Position fix logs, satellite tracking, NMEA (requires antenna)</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+
+        <div class="mask-row"><label class="toggle"><input type="checkbox" class="mask-cb" data-key="qmi_events"><span class="toggle-slider"></span></label>
+          <div class="mask-info"><span class="mask-label">QMI / QCMAP Events</span><div class="mask-codes">0x1367+ &bull; QMI service indications, QCMAP state, data call events</div></div>
+          <span class="mask-vol vol-low">LOW</span></div>
+      </div>
+
+      <hr class="sep">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="dim" style="font-size:12px;margin-right:4px">Presets:</span>
+        <button class="btn sm" onclick="applyPreset('default')">Default</button>
+        <button class="btn sm" onclick="applyPreset('rogue_cell')">Rogue Cell Detection</button>
+        <button class="btn sm" onclick="applyPreset('rf_debug')">RF Debug</button>
+        <button class="btn sm" onclick="applyPreset('all')">Everything</button>
+        <button class="btn sm danger" onclick="applyPreset('none')">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── tcpdump Network Capture ───────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-hdr"><h3>&#9685; Network Capture (tcpdump)</h3></div>
+    <div class="panel-body">
+      <p class="dim" style="margin-bottom:12px">Packet capture on network interfaces. <strong>File mode</strong> saves to disk (storage risk with long captures). <strong>Stream mode</strong> pipes live to Wireshark with zero disk writes.</p>
+
+      <!-- Mode selector -->
+      <div class="rule-type-btns" style="margin-bottom:12px">
+        <button class="active" id="cap-mode-file" onclick="setCapMode('file',this)">&#128190; File (save to disk)</button>
+        <button id="cap-mode-stream" onclick="setCapMode('stream',this)">&#9654; Live Stream (zero disk)</button>
+      </div>
+
+      <!-- Shared controls -->
       <div class="form-row">
         <label>Interface</label>
-        <select id="cap-iface">
-          <option value="bridge0">bridge0 (WiFi LAN &#8644; device)</option>
-          <option value="wlan0">wlan0 (AP radio)</option>
-          <option value="rmnet0">rmnet0 (LTE uplink)</option>
-          <option value="wlan1">wlan1 (STA)</option>
-          <option value="any">any (all interfaces)</option>
-        </select>
+        <select id="cap-iface"></select>
       </div>
       <div class="form-row">
-        <label>Filter</label>
-        <input id="cap-filter" placeholder="tcpdump BPF: host 8.8.8.8, port 80, tcp, etc. (blank = all)">
+        <label>BPF Filter</label>
+        <input id="cap-filter" placeholder="host 8.8.8.8, port 80, tcp, not port 8888 (blank = all)">
       </div>
-      <div class="form-row">
-        <label>Duration</label>
-        <select id="cap-dur">
-          <option value="30">30 seconds</option>
-          <option value="60" selected>1 minute</option>
-          <option value="120">2 minutes</option>
-          <option value="300">5 minutes</option>
-          <option value="600">10 minutes</option>
-          <option value="0">Until stopped manually</option>
-        </select>
+
+      <!-- File mode extras -->
+      <div id="cap-file-opts">
+        <div class="form-row">
+          <label>Duration</label>
+          <select id="cap-dur">
+            <option value="30">30 seconds</option>
+            <option value="60" selected>1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="0">Until stopped</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Filename</label>
+          <input id="cap-name" placeholder="auto-timestamped if blank">
+        </div>
       </div>
-      <div class="form-row">
-        <label>Filename</label>
-        <input id="cap-name" placeholder="cap1  (auto-timestamped)">
+
+      <!-- Stream mode extras -->
+      <div id="cap-stream-opts" style="display:none">
+        <div class="form-help" style="margin-bottom:8px;color:#3a6080">Stream endpoints appear below after starting. Connect Wireshark via: <code>wireshark -k -i TCP@&lt;ip&gt;:&lt;port&gt;</code></div>
+        <div id="cap-stream-urls" style="display:none">
+          <div class="stream-url" id="cap-url-rndis" onclick="copyStreamUrl(this)"></div>
+          <div class="stream-url" id="cap-url-wifi" onclick="copyStreamUrl(this)"></div>
+          <div class="stream-url" id="cap-url-adb" onclick="copyStreamUrl(this)"></div>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button class="btn success" onclick="startCapture()">&#9654; Start Capture</button>
-        <button class="btn danger" onclick="stopCapture()">&#9646;&#9646; Stop</button>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn success" id="cap-start-btn" onclick="startCapture()">&#9654; Start</button>
+        <button class="btn danger" id="cap-stop-btn" onclick="stopCapture()">&#9646;&#9646; Stop</button>
         <button class="btn" onclick="loadCapture()">&#8635; Refresh</button>
       </div>
     </div>
   </div>
 
+  <!-- ── Active status ──────────────────────────────────────────────────── -->
   <div class="panel">
-    <div class="panel-hdr"><h3>Active Capture</h3></div>
+    <div class="panel-hdr"><h3>Active Status</h3></div>
     <div class="panel-body">
-      <div id="cap-active" class="dim">No capture running.</div>
+      <div id="cap-active-file" class="dim">No file capture running.</div>
+      <div id="cap-active-stream" class="dim" style="margin-top:6px">No stream running.</div>
     </div>
   </div>
 
+  <!-- ── Saved captures ─────────────────────────────────────────────────── -->
   <div class="panel">
     <div class="panel-hdr">
       <h3>Saved Captures</h3>
       <button class="btn sm danger" onclick="clearCaptures()">Clear All</button>
     </div>
     <div class="panel-body" style="padding:0">
-      <div id="cap-files" style="padding:10px">
-        <div class="dim">No captures yet.</div>
+      <div id="cap-files" style="padding:10px"><div class="dim">No captures yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ── Port config ────────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-hdr"><h3>Stream Port Configuration</h3></div>
+    <div class="panel-body" style="display:flex;gap:24px;flex-wrap:wrap">
+      <div>
+        <div class="dim" style="margin-bottom:4px">DIAG Stream Port</div>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="diag-sport-input" value="37026" style="width:90px">
+          <button class="btn sm primary" onclick="saveDiagPort()">Save</button>
+        </div>
+        <div class="form-help">QCSuper / Wireshark QMDL stream</div>
+      </div>
+      <div>
+        <div class="dim" style="margin-bottom:4px">tcpdump Stream Port</div>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="cap-sport-input" value="37027" style="width:90px">
+          <button class="btn sm primary" onclick="saveCapPort()">Save</button>
+        </div>
+        <div class="form-help">Wireshark live PCAP stream</div>
       </div>
     </div>
   </div>
+
 </section>
 
 </main>
@@ -811,43 +1011,286 @@ async function deleteIpRule(priority, from){
 
 // ─── Capture ──────────────────────────────────────────────────────────────────
 
-async function loadCapture(){
-  const d = await api('capture.cgi','action=status');
-  if(!d.ok){ alert2('cap-alert','Failed: '+d.error,true); return; }
-  const s = d.data;
-  if(s.running){
-    $('cap-active').innerHTML = `<span class="dot ok"><span class="ind"></span></span> <strong>tcpdump</strong> running — PID ${s.pid} &bull; Interface: ${s.iface} &bull; File: ${s.file} &bull; <span class="dim">${s.elapsed||''}s elapsed</span>`;
-    setDot('ds-cap','ok');
+// Mask preset definitions
+const MASK_PRESETS = {
+  default:    ['lte_rrc','lte_nas','wcdma','gsm','umts_nas','nr_rrc'],
+  rogue_cell: ['lte_rrc','lte_nas','wcdma','gsm','umts_nas','nr_rrc','lte_l1','qmi_events'],
+  rf_debug:   ['lte_rrc','lte_nas','lte_l1','lte_mac','lte_rlc','lte_pdcp','nr_rrc'],
+  all:        ['lte_rrc','lte_nas','lte_l1','lte_mac','lte_rlc','lte_pdcp','nr_rrc','wcdma','gsm','umts_nas','ip_data','f3_debug','gps','qmi_events'],
+  none:       []
+};
+
+let _capMode = 'file'; // 'file' | 'stream'
+let _diagStatus = {};
+
+function setCapMode(mode, btn){
+  _capMode = mode;
+  document.querySelectorAll('#cap-mode-file,#cap-mode-stream').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  $('cap-file-opts').style.display  = mode === 'file'   ? '' : 'none';
+  $('cap-stream-opts').style.display = mode === 'stream' ? '' : 'none';
+}
+
+function streamUrlHtml(elId, label, cmd){
+  const el = $(elId);
+  if(!el) return;
+  el.innerHTML = `<span class="slabel">${label}</span>${cmd}`;
+}
+
+function copyStreamUrl(el){
+  const text = el.childNodes[el.childNodes.length-1].textContent.trim();
+  navigator.clipboard.writeText(text)
+    .then(()=>toast('Copied to clipboard'))
+    .catch(()=>toast('Select and copy manually'));
+}
+
+function maskIndicatorDirty(){
+  $('mask-indicator').textContent = '● Unsaved changes';
+  $('mask-indicator').style.color = '#ffaa00';
+}
+function maskIndicatorClean(){
+  $('mask-indicator').textContent = '✓ Saved';
+  $('mask-indicator').style.color = '#00ff88';
+}
+
+function maskToggleAll(on){
+  document.querySelectorAll('.mask-cb').forEach(cb=>{ cb.checked = on; });
+  maskIndicatorDirty();
+}
+
+function applyPreset(name){
+  const keys = MASK_PRESETS[name] || [];
+  document.querySelectorAll('.mask-cb').forEach(cb=>{
+    cb.checked = keys.includes(cb.dataset.key);
+  });
+  $('mask-all').checked = (name === 'all');
+  maskIndicatorDirty();
+}
+
+function applyMaskFromData(mask){
+  if(!mask) return;
+  document.querySelectorAll('.mask-cb').forEach(cb=>{
+    const key = cb.dataset.key;
+    if(key in mask) cb.checked = !!mask[key];
+  });
+  // Check master toggle
+  const allOn = document.querySelectorAll('.mask-cb:not(:checked)').length === 0;
+  $('mask-all').checked = allOn;
+}
+
+async function saveMask(){
+  const params = {action: 'set_mask'};
+  document.querySelectorAll('.mask-cb').forEach(cb=>{ params[cb.dataset.key] = cb.checked ? '1' : '0'; });
+  if($('mask-all').checked) params.enable_all = '1';
+  const d = await api('diag.cgi', null, 'POST', encode(params));
+  if(d.ok){
+    maskIndicatorClean();
+    const msg = d.data && d.data.applied_to_rayhunter
+      ? 'Mask saved and applied to rayhunter'
+      : 'Mask saved — will apply on rayhunter fork deployment';
+    toast(msg);
   } else {
-    $('cap-active').innerHTML = '<span class="dim">No capture running.</span>';
-    setDot('ds-cap','warn');
+    toast('Error: '+d.error, true);
+  }
+}
+
+async function saveDiagPort(){
+  const port = $('diag-sport-input').value;
+  const d = await api('diag.cgi', null, 'POST', encode({action:'set_stream_port', port}));
+  if(d.ok){ toast('DIAG stream port saved'); loadCapture(); }
+  else { toast('Error: '+d.error, true); }
+}
+
+async function saveCapPort(){
+  const port = $('cap-sport-input').value;
+  const d = await api('capture.cgi', null, 'POST', encode({action:'set_stream_port', port}));
+  if(d.ok){ toast('tcpdump stream port saved'); }
+  else { toast('Error: '+d.error, true); }
+}
+
+// Populate interface selector from live device data
+function populateIfaceSelect(ifaces){
+  const sel = $('cap-iface');
+  const cur = sel.value;
+  const labels = {
+    bridge0:'bridge0 — WiFi LAN ↔ device',
+    rmnet0:'rmnet0 — LTE uplink',
+    wlan0:'wlan0 — AP radio',
+    wlan1:'wlan1 — STA uplink',
+    rndis0:'rndis0 — USB RNDIS',
+    lo:'lo — loopback'
+  };
+  if(ifaces && ifaces.length){
+    sel.innerHTML = ifaces.map(i=>`<option value="${i}"${i===cur?' selected':''}>${labels[i]||i}</option>`).join('');
+  }
+}
+
+async function loadDiagOwner(){
+  const d = await api('diag.cgi','action=diag_owner_get');
+  if(!d.ok){ $('diag-owner-status').textContent = 'error: '+d.error; return; }
+  const owner = d.data.diag_owner || 'free';
+  const dm    = d.data.debug_mode;
+  // owner string is process name or 'free'
+  const byRh  = owner.includes('rayhunter') || owner === 'free' && !dm;
+  const byExt = !byRh;
+  $('diag-owner-status').textContent = owner === 'free'
+    ? (dm ? 'free — external mode' : 'free — rayhunter mode')
+    : `held by: ${owner}`;
+  $('btn-owner-rh').className  = 'btn' + (byRh  ? ' active' : '');
+  $('btn-owner-ext').className = 'btn' + (byExt ? ' active' : '');
+  const note = $('diag-owner-note');
+  if(dm){
+    note.textContent = 'External mode: rayhunter will NOT claim /dev/diag on restart. Connect QCSuper via USB DIAG or ADB DIAG tunnel.';
+  } else {
+    note.textContent = 'rayhunter mode: rayhunter holds /dev/diag for QMDL capture. QCSuper must use the rayhunter stream endpoint (fork required).';
+  }
+}
+
+async function setDiagOwner(owner){
+  $('diag-owner-spinner').style.display = '';
+  $('btn-owner-rh').disabled = true;
+  $('btn-owner-ext').disabled = true;
+  const d = await api('diag.cgi',`action=diag_owner_set&owner=${owner}`);
+  if(!d.ok){ alert2('cap-alert','DIAG owner set failed: '+d.error,true); }
+  // Wait for rayhunter to restart before refreshing
+  await new Promise(r=>setTimeout(r,3500));
+  $('diag-owner-spinner').style.display = 'none';
+  $('btn-owner-rh').disabled = false;
+  $('btn-owner-ext').disabled = false;
+  await loadDiagOwner();
+  await loadCapture();
+}
+
+async function loadCapture(){
+  loadDiagOwner(); // fire and forget — independent panel
+  // Load DIAG status
+  const dd = await api('diag.cgi','action=status');
+  if(dd.ok){
+    _diagStatus = dd.data || {};
+    const rh = _diagStatus.rayhunter || {};
+    const st = _diagStatus.stream || {};
+    const ifaces = _diagStatus.interfaces || {};
+    const sport = _diagStatus.stream_port || 37026;
+
+    // Status cards
+    $('diag-rh-status').textContent = rh.running ? 'RUNNING' : 'STOPPED';
+    $('diag-rh-status').className = 'val '+(rh.running?'ok':'err');
+    $('diag-rh-meta').textContent = rh.running ? `PID — port ${rh.port}` : '';
+
+    if(rh.fork_stream){
+      $('diag-stream-status').textContent = 'ACTIVE';
+      $('diag-stream-status').className = 'val ok';
+      $('diag-stream-meta').textContent = `port ${sport}`;
+      $('diag-stream-urls').style.display = '';
+      $('diag-stream-pending').style.display = 'none';
+      // Build stream URL boxes
+      if(ifaces.rndis) streamUrlHtml('diag-url-rndis','RNDIS / USB Modem — direct, no ADB',
+        `qcsuper --host-diag ${ifaces.rndis}:${sport} --wireshark-live`);
+      if(ifaces.wifi)  streamUrlHtml('diag-url-wifi', 'WiFi LAN',
+        `qcsuper --host-diag ${ifaces.wifi}:${sport} --wireshark-live`);
+      streamUrlHtml('diag-url-adb','ADB Tunnel',
+        `adb forward tcp:${sport} tcp:${sport} && qcsuper --host-diag 127.0.0.1:${sport} --wireshark-live`);
+    } else {
+      $('diag-stream-status').textContent = rh.running ? 'PENDING FORK' : 'UNAVAILABLE';
+      $('diag-stream-status').className = 'val warn';
+      $('diag-stream-meta').textContent = rh.running ? 'rayhunter fork not deployed' : '';
+      $('diag-stream-urls').style.display = 'none';
+      $('diag-stream-pending').style.display = rh.running ? '' : 'none';
+    }
+
+    $('diag-port').textContent = sport;
+    $('diag-sport-input').value = sport;
+
+    // Mask summary
+    const mask = _diagStatus.mask || {};
+    const onCount = Object.values(mask).filter(Boolean).length;
+    const total = Object.keys(mask).length;
+    $('diag-mask-summary').textContent = `${onCount} / ${total}`;
+    $('diag-mask-meta').textContent = 'categories enabled';
+
+    // Apply mask toggles
+    applyMaskFromData(mask);
+    maskIndicatorClean();
+
+    setDot('ds-cap', rh.running ? 'ok' : 'warn');
   }
 
-  const files = s.files||[];
-  if(!files.length){
-    $('cap-files').innerHTML = '<div class="dim">No captures yet.</div>';
+  // Load tcpdump status
+  const cd = await api('capture.cgi','action=status');
+  if(!cd.ok){ alert2('cap-alert','Capture status failed: '+cd.error,true); return; }
+  const cs = cd.data || {};
+  const cf = cs.file || {};
+  const cst = cs.stream || {};
+
+  // Populate interface list
+  if(cs.ifaces) populateIfaceSelect(cs.ifaces);
+
+  // File capture status
+  if(cf.running){
+    $('cap-active-file').innerHTML = `<span class="dot ok"><span class="ind"></span></span> <strong>tcpdump</strong> — PID ${cf.pid} &bull; iface: ${cf.iface} &bull; file: ${cf.file} &bull; ${cf.elapsed||0}s elapsed`;
+    setDot('ds-cap','ok');
   } else {
-    $('cap-files').innerHTML = files.map(f=>`
-      <div class="cap-file">
+    $('cap-active-file').innerHTML = '<span class="dim">No file capture running.</span>';
+  }
+
+  // Stream status
+  const csport = cst.port || 37027;
+  $('cap-sport-input').value = csport;
+  if(cst.running){
+    $('cap-active-stream').innerHTML = `<span class="dot ok"><span class="ind"></span></span> <strong>tcpdump stream</strong> active — port ${csport}`;
+    $('cap-stream-urls').style.display = '';
+    const wifiIp  = cst.wifi_ip  || (_diagStatus.interfaces||{}).wifi  || '';
+    const rndisIp = cst.rndis_ip || (_diagStatus.interfaces||{}).rndis || '';
+    if(rndisIp) streamUrlHtml('cap-url-rndis','RNDIS / USB Modem',
+      `wireshark -k -i TCP@${rndisIp}:${csport}`);
+    if(wifiIp)  streamUrlHtml('cap-url-wifi', 'WiFi LAN',
+      `wireshark -k -i TCP@${wifiIp}:${csport}`);
+    streamUrlHtml('cap-url-adb','ADB Tunnel',
+      `adb forward tcp:${csport} tcp:${csport} && wireshark -k -i TCP@127.0.0.1:${csport}`);
+  } else {
+    $('cap-active-stream').innerHTML = '<span class="dim">No stream running.</span>';
+    $('cap-stream-urls').style.display = 'none';
+  }
+
+  // Saved files
+  const files = cf.files || cs.files || [];
+  $('cap-files').innerHTML = files.length
+    ? files.map(f=>`<div class="cap-file">
         <span class="fname">&#128190; ${f.name}</span>
         <span class="fsize">${f.size}</span>
-        <a class="btn sm" href="/cgi-bin/capture.cgi?action=download&file=${encodeURIComponent(f.name)}">Download</a>
-      </div>`).join('');
-  }
+        <a class="btn sm" href="/cgi-bin/capture.cgi?action=download&file=${encodeURIComponent(f.name)}">&#8681; Download</a>
+      </div>`).join('')
+    : '<div class="dim" style="padding:6px 0">No saved captures.</div>';
 }
 
 async function startCapture(){
-  const iface=$('cap-iface').value, filter=$('cap-filter').value.trim(),
-        dur=$('cap-dur').value, name=$('cap-name').value.trim();
-  const d = await api('capture.cgi',null,'POST',encode({action:'start',iface,filter,dur,name}));
-  if(d.ok){ toast('Capture started'); setTimeout(loadCapture,1000); }
-  else { toast('Error: '+d.error,true); }
+  const iface  = $('cap-iface').value;
+  const filter = $('cap-filter').value.trim();
+  if(!iface){ toast('Select an interface',true); return; }
+
+  if(_capMode === 'stream'){
+    const d = await api('capture.cgi',null,'POST',encode({action:'stream_start',iface,filter}));
+    if(d.ok){ toast('Stream started — connect Wireshark'); setTimeout(loadCapture,1200); }
+    else { toast('Error: '+d.error,true); }
+  } else {
+    const dur  = $('cap-dur').value;
+    const name = $('cap-name').value.trim();
+    const d = await api('capture.cgi',null,'POST',encode({action:'start',iface,filter,dur,name}));
+    if(d.ok){ toast('Capture started'); setTimeout(loadCapture,1000); }
+    else { toast('Error: '+d.error,true); }
+  }
 }
 
 async function stopCapture(){
-  const d = await api('capture.cgi',null,'POST',encode({action:'stop'}));
-  if(d.ok){ toast('Capture stopped'); setTimeout(loadCapture,500); }
-  else { toast('Error: '+d.error,true); }
+  if(_capMode === 'stream'){
+    const d = await api('capture.cgi',null,'POST',encode({action:'stream_stop'}));
+    if(d.ok){ toast('Stream stopped'); setTimeout(loadCapture,500); }
+    else { toast('Error: '+d.error,true); }
+  } else {
+    const d = await api('capture.cgi',null,'POST',encode({action:'stop'}));
+    if(d.ok){ toast('Capture stopped'); setTimeout(loadCapture,500); }
+    else { toast('Error: '+d.error,true); }
+  }
 }
 
 async function clearCaptures(){
@@ -856,6 +1299,14 @@ async function clearCaptures(){
   if(d.ok){ toast('Captures cleared'); loadCapture(); }
   else { toast('Error: '+d.error,true); }
 }
+
+// Wire up mask change listeners
+document.querySelectorAll('.mask-cb').forEach(cb=>{
+  cb.addEventListener('change', ()=>{
+    if(!cb.checked) $('mask-all').checked = false;
+    maskIndicatorDirty();
+  });
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 

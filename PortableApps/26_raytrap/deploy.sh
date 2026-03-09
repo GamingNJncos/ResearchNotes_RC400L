@@ -66,7 +66,8 @@ for f in tinyproxy tcpdump libpcap.so.1 raytrap_daemon start.sh \
           tinyproxy.conf www/index.html \
           www/cgi-bin/status.cgi www/cgi-bin/firewall.cgi \
           www/cgi-bin/proxy.cgi www/cgi-bin/wifi.cgi \
-          www/cgi-bin/routing.cgi www/cgi-bin/capture.cgi; do
+          www/cgi-bin/routing.cgi www/cgi-bin/capture.cgi \
+          www/cgi-bin/diag.cgi; do
     if [ ! -f "$SRC/$f" ]; then
         err "Missing from package: $f"
         MISSING=1
@@ -112,7 +113,7 @@ hdr "5. Installing web files"
 cp "$SRC/start.sh"       "$DEST/start.sh"       && chmod 755 "$DEST/start.sh"       && ok "start.sh"
 cp "$SRC/www/index.html" "$DEST/www/index.html"                                      && ok "index.html"
 
-for CGI in status firewall proxy wifi routing capture; do
+for CGI in status firewall proxy wifi routing capture diag; do
     cp "$SRC/www/cgi-bin/${CGI}.cgi" "$DEST/www/cgi-bin/${CGI}.cgi"
     chmod 755 "$DEST/www/cgi-bin/${CGI}.cgi"
     ok "cgi-bin/${CGI}.cgi"
