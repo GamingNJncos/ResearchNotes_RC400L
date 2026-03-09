@@ -1200,6 +1200,30 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 
 ---
 
+## Side Quests
+
+Deeper dives that don't fit the main narrative flow. Collapsed by default — each is a standalone document.
+
+<details>
+<summary><strong>QMI Capability Comparison — RC400L vs JMR540</strong></summary>
+
+Full comparison of the QMI infrastructure on both devices: binary sizes, library versions, MCM framework (JMR540 only), QCMAP stack differences, AT command surface, QMI IP config, SoC variants, modem transport, and diagnostic test coverage.
+
+→ [SideQuests/QMI_Comparison.md](SideQuests/QMI_Comparison.md)
+
+</details>
+
+<details>
+<summary><strong>atfwd_daemon Reversal — RC400L AT Command Surface</strong></summary>
+
+Static analysis of the Orbic `atfwd_daemon` (164 KB, ARM stripped ELF). Covers all 44 registered AT commands, QMI services accessed, QCMAP C++ interface, embedded RSA key material, GPS forge mode, NAS/LTE cell info commands, audio/PCM mixer control, GPIO handler, shell exec paths, voice call monitoring, and Meige module origin indicators.
+
+→ [SideQuests/atfwd_reversal.md](SideQuests/atfwd_reversal.md)
+
+</details>
+
+---
+
 ## References
 
 - EFF Rayhunter: https://github.com/EFForg/rayhunter
