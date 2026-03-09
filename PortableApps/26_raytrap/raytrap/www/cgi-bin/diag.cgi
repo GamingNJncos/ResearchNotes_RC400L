@@ -182,8 +182,8 @@ if [ "$ACTION" = "diag_owner_get" ]; then
     DIAG_PID="null"
 
     if [ -n "$RH_PID" ]; then
-        # Does rayhunter hold /dev/diag?
-        if ls -la "/proc/${RH_PID}/fd" 2>/dev/null | grep -q 'diag'; then
+        # Does rayhunter hold /dev/diag? Match exact symlink target.
+        if ls -la "/proc/${RH_PID}/fd" 2>/dev/null | grep -q ' -> /dev/diag$'; then
             DIAG_OWNER="rayhunter"
             DIAG_PID="$RH_PID"
         fi
@@ -193,7 +193,7 @@ if [ "$ACTION" = "diag_owner_get" ]; then
     if [ "$DIAG_OWNER" = "free" ]; then
         for pid in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
             [ "$pid" = "$RH_PID" ] && continue
-            if ls -la "/proc/${pid}/fd" 2>/dev/null | grep -q ' -> /dev/diag'; then
+            if ls -la "/proc/${pid}/fd" 2>/dev/null | grep -q ' -> /dev/diag$'; then
                 DIAG_OWNER=$(cat "/proc/${pid}/comm" 2>/dev/null || printf 'pid:%s' "$pid")
                 DIAG_PID="$pid"
                 break
@@ -229,11 +229,14 @@ if [ "$ACTION" = "diag_owner_set" ]; then
         printf 'debug_mode = %s\n' "$NEW_MODE" >> "$CONF"
     fi
 
-    # Restart rayhunter via its init script so start-stop-daemon manages the pidfile correctly.
-    # Direct kill leaves /tmp/rayhunter.pid stale — start-stop-daemon would refuse to restart.
-    # Use stop+start rather than restart: restart has set -e and aborts if stop returns non-zero
-    # (e.g. rayhunter not running). stop is allowed to fail here.
-    /etc/init.d/rayhunter_daemon stop >/dev/null 2>&1; /etc/init.d/rayhunter_daemon start >/dev/null 2>&1
+    # Kill rayhunter by actual PID (not pidfile — pidfile may be stale from ipt_daemon launch).
+    # Init script uses start-stop-daemon with --make-pidfile which tracks the bash wrapper PID,
+    # not the rayhunter PID, so -K kills the wrong process and set -e aborts before start runs.
+    RH_PID=$(ps 2>/dev/null | grep rayhunter-daemon | grep -v grep | awk '{print $1}' | head -1)
+    [ -n "$RH_PID" ] && kill "$RH_PID" 2>/dev/null
+    sleep 2
+    RUST_LOG=info /data/rayhunter/rayhunter-daemon /data/rayhunter/config.toml \
+        >> /data/rayhunter/rayhunter.log 2>&1 &
 
     printf '{"ok":true,"data":{"owner":'
     jstr "$OWNER"
