@@ -29,6 +29,7 @@
 - [Step 19 — The SMB Dead End](#step-19--the-smb-dead-end)
 - [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
 - [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
+- [Step 22 — RayTrap: Unified Web Control Interface](#step-22--raytrap-unified-web-control-interface)
 - [Retrospective: What I'd Do Differently](#retrospective-what-id-do-differently)
 - [What's Next](#whats-next)
 
@@ -984,6 +985,154 @@ The installer verifies xtables-multi, creates `/cache/ipt/`, installs and chmod'
 
 ---
 
+## Step 22 — RayTrap: Unified Web Control Interface
+
+By Step 21, the device had a fully operational iptables daemon, wpa_supplicant in concurrent AP+STA mode, tcpdump, tinyproxy, and a full shadow-utils suite — but every operation required either rootshell one-liners through the FIFO or direct file edits. The capability was there; the friction was not. RayTrap is the answer to that friction: a single-page web app running on the device itself that surfaces all of those primitives through a browser UI.
+
+### Why Build This?
+
+The access model from a laptop is:
+
+```bash
+adb forward tcp:8889 tcp:8888
+# Then open http://127.0.0.1:8889/ in browser
+```
+
+That's it. No rootshell, no FIFO commands, no manual wpa_cli sequences. Everything that previously required knowing the exact syntax of `ipt_ctl.sh`, `wpa_cli`, `ip rule`, `tcpdump`, and tinyproxy is now behind a web form.
+
+The practical motivation: once the device is deployed — in a bag, on a bench, plugged into a car — ADB is the only reliable channel back to it without connecting a WiFi client. A web UI over ADB tunnel removes the need to remember every command incantation and makes the research workflow sustainable.
+
+### Choosing the Web Server
+
+The Orbic device has two web server binaries available:
+
+**`thttpd`** — the existing Orbic web server, running on port 80 to serve the device admin panel. Initial instinct was to repurpose it. This failed for three reasons:
+1. The Orbic build is customized: `-h` exits instead of showing help, `-d` specifies a docroot that points to `cgi-bin/index.html`, not `index.html`.
+2. It validates the `Host` header — requests must include `192.168.1.1` as the host or they're rejected. Fine for LAN access, broken over ADB tunnel.
+3. It's already in use. Running a second instance would need a different port and still hit the host-header problem.
+
+**`busybox httpd`** — the httpd applet built into the device's busybox binary. Smaller, no host header validation, standard CGI execution, configurable docroot and port on the command line. No separate binary to deploy. The catch: it can't be launched from rootshell because the Qualcomm LSM blocks `socket()` for the ADB process subtree (CapBnd=0x00c0). The inittab escape handles this — a `once` entry spawns httpd with full capabilities via init.
+
+```sh
+# Injected by deploy.sh:
+rt1:5:once:busybox httpd -p 8888 -h /cache/raytrap/www
+```
+
+The deploy script automates this, waits up to 20 seconds for port 8888 to appear in `/proc/net/tcp6`, then cleans up the once entry and signals init again.
+
+### CGI Architecture
+
+Every tab in the UI is backed by a shell CGI script in `/cache/raytrap/www/cgi-bin/`. The six scripts are:
+
+| Script | Purpose |
+|---|---|
+| `status.cgi` | System overview: service PIDs, uptime, disk free, rule count, wlan1 state |
+| `firewall.cgi` | Add/delete/flush ORBIC_* iptables rules (TEE, REDIRECT, DNAT, DROP, MARK) |
+| `proxy.cgi` | Start/stop tinyproxy, enable/disable transparent HTTP, edit config, tail log |
+| `wifi.cgi` | wpa_supplicant status, add/remove/connect networks via wpa_cli |
+| `routing.cgi` | ip rule list, setup policy tables, per-client LTE vs wlan1 routing |
+| `capture.cgi` | tcpdump start/stop with BPF filter, interface selection, PCAP download |
+
+All CGI scripts output JSON (`Content-Type: application/json`). The frontend is a single `index.html` with ~875 lines of vanilla JS that fetches from those endpoints and renders results client-side. No framework, no build step, no external dependencies.
+
+**One CGI gotcha worth documenting:** URL-decoding POST bodies in busybox sh. The obvious approach — `read -r BODY` — silently drops the final line if it doesn't end with a newline, which POST bodies don't. The fix is:
+
+```sh
+BODY=$(printf '%s\n' "$QUERY_STRING")   # force newline
+# or for POST:
+BODY=$(dd bs=$CONTENT_LENGTH count=1 2>/dev/null | printf '%s\n' "$(cat)")
+```
+
+Then URL-decode with sed: `printf '%s\n' "$val" | sed 's/+/ /g; s/%/\\x/g' | xargs -0 printf '%b'`. Getting this wrong results in silently truncated form data — no error, just missing fields.
+
+### The Six Tabs
+
+**Dashboard** — live status poll every 15 seconds. Shows green/red indicators for the iptables daemon, tinyproxy, wpa_supplicant, and the active capture. System panel shows uptime, `/cache` and `/data` free space, kernel version.
+
+![RayTrap Dashboard](assets/raytrap_dashboard.png)
+
+**Firewall** — add rules to the ORBIC_PREROUTING (nat) and ORBIC_MANGLE chains without touching any QCMAP chain. Five rule types exposed as form presets:
+- **Mirror (TEE)**: duplicate all WiFi client traffic (or a single source IP) to a Wireshark host on the LAN — passive capture with no ARP poisoning
+- **Redirect Port**: transparent port redirect (REDIRECT target, nat PREROUTING) — e.g., port 80 → 8118 for tinyproxy
+- **Forward to Host (DNAT)**: forward a port to a different IP:port — redirect DNS, forward specific app traffic to a capture server
+- **Block Source**: DROP in filter FORWARD for a source IP or subnet
+- **Mark Traffic**: MARK in mangle for use with policy routing on the Routing tab
+
+The active rules table shows all entries in ORBIC_* chains with type badges (TEE / REDIRECT / DNAT / DROP / MARK) and a per-rule delete button.
+
+![RayTrap Firewall](assets/raytrap_firewall.png)
+
+**Proxy** — tinyproxy lifecycle control. Start/stop buttons, PID display, toggle for transparent HTTP mode (which adds/removes the port 80 REDIRECT rule automatically), editable config (port, log level, allow subnet, max clients, timeout), and a live log tail showing the last 30 lines of the tinyproxy access log.
+
+![RayTrap Proxy](assets/raytrap_proxy.png)
+
+**WiFi** — wpa_supplicant STA management for wlan1. Shows connection state, current SSID, IP address, and wpa_supplicant PID. Add Network form takes SSID + passphrase (blank for open) and calls `wpa_cli add_network / set_network / enable_network / select_network`. The saved networks table shows all configured networks with current/saved status badges and connect/remove buttons per row. Raw wpa_cli status output shown in a log panel.
+
+Note the wlan1 scanning limitation: entering a note in the form UI explains that scanning returns empty while wlan0 AP is active, so SSID must be entered directly.
+
+![RayTrap WiFi](assets/raytrap_wifi.png)
+
+**Routing** — policy routing control. Separate `ip rule` tables for LTE (rmnet0, table 100) and wlan1 STA (table 200). An "Initialize Routing Tables" button runs the one-time `ip route add` setup to populate both tables. Per-client routing rules let you assign a specific WiFi client's traffic to either uplink — run two clients simultaneously on different exits.
+
+![RayTrap Routing](assets/raytrap_routing.png)
+
+**Capture** — tcpdump control. Interface picker (bridge0 / wlan0 / rmnet0 / wlan1 / any), BPF filter text field, duration selector (30s to unlimited), and optional filename prefix. Start/Stop/Refresh buttons. Active capture shows PID, interface, filename, and elapsed time. Saved captures list with file sizes and a Download link that serves the PCAP directly from the CGI (Content-Disposition: attachment).
+
+![RayTrap Capture](assets/raytrap_capture.png)
+
+### Deployment
+
+```bash
+# From PC (repo root):
+export MSYS_NO_PATHCONV=1
+adb push PortableApps/26_raytrap /data/tmp/raytrap
+adb shell
+# In adb shell:
+rootshell
+sh /data/tmp/raytrap/deploy.sh
+
+# Clean up staging (uid=2000 — must be done from adb shell, not rootshell):
+exit   # back to adb shell (non-root)
+adb shell rm -rf /data/tmp/raytrap
+```
+
+The deploy script:
+1. Verifies busybox httpd is available and the package is complete
+2. Stops any existing httpd on port 8888
+3. Installs tinyproxy, tcpdump, libpcap.so.1 to `/cache/bin/` and `/cache/lib/`
+4. Creates `/cache/raytrap/www/cgi-bin/` and `/cache/raytrap/captures/`
+5. Installs all CGI scripts (chmod 755) and index.html
+6. Patches `/etc/init.d/misc-daemon` to call `raytrap_daemon start` at boot (after modem ONLINE)
+7. Injects a `once` inittab entry, signals init, waits for port 8888
+8. Cleans up the once entry
+
+**After deploy, access:**
+
+```bash
+adb forward tcp:8889 tcp:8888
+# Open: http://127.0.0.1:8889/
+```
+
+Boot persistence is via the misc-daemon patch — on every subsequent reboot, RayTrap starts automatically without any intervention. The inittab escape handles the capability requirement: httpd runs with `CapEff=0x3fffffffff`.
+
+### Files
+
+All files in `PortableApps/26_raytrap/`:
+
+| File | Role |
+|---|---|
+| `deploy.sh` | One-step installer from rootshell |
+| `raytrap/start.sh` | Manual start script (used by raytrap_daemon) |
+| `raytrap/raytrap_daemon` | `/etc/init.d/` service script (start/stop/status) |
+| `raytrap/tinyproxy` | HTTP proxy binary (ARM, glibc 2.22) |
+| `raytrap/tcpdump` | Packet capture binary (ARM, glibc 2.22) |
+| `raytrap/libpcap.so.1` | libpcap shared library |
+| `raytrap/tinyproxy.conf` | Default tinyproxy configuration |
+| `raytrap/www/index.html` | Single-page web UI (~875 lines, vanilla JS) |
+| `raytrap/www/cgi-bin/*.cgi` | Six shell CGI scripts (status, firewall, proxy, wifi, routing, capture) |
+
+---
+
 ## Retrospective: What I'd Do Differently
 
 **Start with firmware extraction, not the software installer.**
@@ -1023,12 +1172,12 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 - [x] `wpa_supplicant` in concurrent AP+STA mode — `wlan1` (managed) running alongside `wlan0` (AP); `wpa_cli` status/scan/add_network confirmed; AP+managed concurrent mode verified by driver despite nl80211 combination advertisement suggesting otherwise
 - [x] Deploy all remaining PortableApps packages — `conntrackd`, `dbus-daemon`, UBI tools, `genl-ctrl-list`, traf-monitor, MCM framework, netlink QoS tools, and full shadow_extras installed to `/cache/bin/` and `/cache/lib/`
 - [x] `dbus-uuidgen`, `conntrackd`, `ubinfo`, `genl-ctrl-list`, `nl-cls-list`, `lastlog`, `pwck` all smoke-tested and confirmed working
+- [x] Deploy RayTrap web UI (PortableApps/26_raytrap) — busybox httpd on port 8888, 6 CGI endpoints (status, firewall, proxy, wifi, routing, capture), boot-persistent via misc-daemon patch, all tabs confirmed working
 
 **Immediate:**
-- [ ] TEE traffic mirroring — test with active WiFi client and Wireshark capture host on LAN
-- [ ] tinyproxy — deploy and test transparent HTTP proxy via inittab escape; test port 80 → 8118 REDIRECT
-- [ ] thttpd — deploy and test on port 8888 via inittab escape
-- [ ] wpa_supplicant upstream connection — configure known SSID/PSK on `wlan1`, confirm association and routed traffic; scan returns empty while AP active (radio constraint) so target must be on same channel or pre-configured by SSID
+- [ ] TEE traffic mirroring — test with active WiFi client and Wireshark capture host on LAN (RayTrap Firewall → Mirror rule)
+- [ ] tinyproxy transparent HTTP — enable via RayTrap Proxy tab, confirm port 80 → 8118 REDIRECT and log capture
+- [ ] wpa_supplicant upstream connection — configure known SSID/PSK on `wlan1` via RayTrap WiFi tab, confirm association and routed traffic; scan returns empty while AP active (radio constraint) so target must be on same channel or pre-configured by SSID
 - [ ] MCM framework — start `mcm_ril_service` via inittab, test `MCM_ATCOP_CLI` and `uim_test_client` against live QMI stack
 - [ ] `dbus-daemon` — attempt direct launch from rootshell (AF_UNIX sockets may not be LSM-blocked); confirm `dbus-send`/`dbus-monitor` against running bus
 - [ ] Extract `libfwupgrade.so` from JMR540 and check its dependency chain
@@ -1040,7 +1189,7 @@ Some of the JMR540 binaries I initially flagged as "Foxconn-only, probably not p
 - [ ] Investigate Orbic's `oma_dm` and `dmclient` — another remote management surface
 - [ ] Compare QMI command surface between RC400L and JMR540 (both use qmuxd)
 - [ ] QCSuper capture session — what does the modem send/receive at the DIAG level during normal operation?
-- [ ] Policy routing: use iptables MARK + iproute2 to split traffic — LTE uplink for some clients, wlan1 STA uplink for others
+- [ ] Policy routing end-to-end — initialize tables via RayTrap Routing tab and confirm per-client LTE vs wlan1 STA routing works with wlan1 associated
 - [ ] Investigate the unused RGB LED — is it wired in firmware at all?
 
 **Longer term:**
@@ -1146,3 +1295,22 @@ The assumption going in: single-radio device, `iw list` shows `#{ managed, AP } 
 - A device that looks like a normal Orbic hotspot from the client side is actually upstream-connected to whatever network the operator chooses, with full traffic visibility and manipulation capability on both sides
 - The P2P-GO mode (also supported by the driver alongside AP) opens Wi-Fi Direct — the device can act as a P2P group owner for direct device-to-device transfers outside the normal AP/STA model
 - **The operational picture:** a $15 device on a SIM card, connected wirelessly to an upstream network it can monitor, serving a local hotspot it can manipulate, with packet capture and arbitrary iptables rules on both sides — deployed in a laptop bag or left on a table
+
+---
+
+### RayTrap — Unified Web Control Interface
+
+All prior capabilities — iptables manipulation, wpa_supplicant, tcpdump, tinyproxy, policy routing — shared one problem: they required shell access and command-line literacy to use. The FIFO daemon removed the capability constraint but not the friction. RayTrap packages all of it behind a browser UI accessible over ADB tunnel.
+
+The web server selection problem was itself illustrative. The device ships with a customized `thttpd` that validates `Host` headers (breaks ADB tunnel), remaps `-h` to `--help` (exits), and is already serving the admin panel on port 80. The correct answer was `busybox httpd` — a six-line invocation, no extra binary, no host header restriction, standard CGI. But it can't be launched from rootshell because the Qualcomm LSM blocks `socket()` from the ADB process subtree. The inittab escape that unlocked tcpdump in Step 20 unlocks httpd identically: a `once` entry via init, spawned with `CapEff=0x3fffffffff`, outside the ADB subtree entirely.
+
+The CGI layer is six shell scripts. The constraint: shell CGI has no standard URL-decoding library. `read -r` drops the final byte of a POST body when there's no trailing newline, silently discarding form fields. The fix (`printf '%s\n' "$1" | sed`) is a one-liner but the failure mode — missing data, no error — is exactly the kind of thing that wastes hours if you don't know to look for it.
+
+**What this opens:**
+
+- Everything the FIFO daemon, wpa_cli, tcpdump, tinyproxy, and ip rule could do is now accessible without knowing any syntax. A Mirror rule for Wireshark is three fields and a button. A transparent HTTP proxy is a toggle. A PCAP download is a link.
+- The access model (`adb forward tcp:8889 tcp:8888`) works from any OS without installing anything beyond adb. Browser as the only client requirement.
+- Boot persistence via misc-daemon means the UI is available within ~30 seconds of device power-on, before a rootshell session is even established. The device can be deployed, powered on remotely, and accessed with no further shell interaction.
+- Adding new capabilities — new CGI endpoints, new tools — requires only dropping a shell script in `cgi-bin/` and reloading. No recompilation, no firmware flash, no dependency chain.
+- The Capture tab, combined with the Firewall TEE mirror rule, creates a complete passive interception workflow from a browser: add a TEE rule targeting your laptop, start a tcpdump on bridge0, download the PCAP. The entire sequence is point-and-click with no command line.
+- **The net result:** the accumulated research from Steps 1–21 is now accessible to anyone with ADB access to the device — no embedded Linux expertise required, no memorized incantations, no rootshell one-liners. The device is operationally complete as a research platform.
