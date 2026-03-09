@@ -1214,9 +1214,9 @@ Full comparison of the QMI infrastructure on both devices: binary sizes, library
 </details>
 
 <details>
-<summary><strong>atfwd_daemon Reversal — RC400L AT Command Surface</strong></summary>
+<summary><strong>atfwd_daemon Reverse Engineering — RC400L AT Command Surface &amp; Security Analysis</strong></summary>
 
-Static analysis of the Orbic `atfwd_daemon` (164 KB, ARM stripped ELF). Covers all 44 registered AT commands, QMI services accessed, QCMAP C++ interface, embedded RSA key material, GPS forge mode, NAS/LTE cell info commands, audio/PCM mixer control, GPIO handler, shell exec paths, voice call monitoring, and Meige module origin indicators.
+Static analysis of the Orbic `atfwd_daemon` (164 KB, ARM stripped ELF). Covers all 44 registered AT commands, QMI services accessed, QCMAP C++ interface, Meige module origin, and a full security assessment including: RSA private key embedded in binary, IMEI-derived WiFi PSK via AES, unauthenticated AT command socket (`/tmp/at-interface.srv.sock → AT+SYSCMD` = local root without inittab), `+GETSIB`/`+PCISCAN` as an AT-based alternative to Rayhunter's DIAG path, unconstrained GPIO control, active voice QMI on a data-only device, and shared-firmware implications across the Meige module customer base.
 
 → [SideQuests/atfwd_reversal.md](SideQuests/atfwd_reversal.md)
 

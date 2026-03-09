@@ -1,4 +1,4 @@
-# Side Quest: atfwd_daemon Reversal — RC400L (Orbic)
+# Side Quest: atfwd_daemon Reverse Engineering — RC400L (Orbic)
 
 **Binary:** `/usr/bin/atfwd_daemon`
 **Size:** 167,064 bytes (164 KB)
@@ -309,6 +309,189 @@ These handlers call `popen()` or `system()` — they execute shell commands as r
 | Shell exec | popen + system | system only (+CFUN reset?) |
 | Voice call monitoring | present | absent |
 | MEIGE origin indicators | `+MEIGEDL`, RSA, GPS forge | absent |
+
+---
+
+## Security Analysis
+
+What follows is a structured security assessment of the attack surface exposed by `atfwd_daemon`. Findings are ordered by severity and exploitation directness.
+
+---
+
+### CRITICAL — RSA Private Key Embedded in Binary
+
+**Finding:** `rsa_loadPRIVATEKeyFromString` loads a PEM-format RSA *private* key from a string constant via `BIO_new_mem_buf` + `PEM_read_bio_RSAPrivateKey`. The private key is one of the 4 base64 blobs embedded in the binary. It is used by `RSA_private_decrypt` to decrypt inbound USB mode switch commands.
+
+**Mechanism:** USB composition switching via `/sbin/usb/compositions/switch_usb` is gated by an RSA decryption check. The caller must encrypt their switch command with the corresponding public key. The daemon decrypts it with the embedded private key, then additionally validates `rsa_chip_id` against the device serial number (`@@mk:g_rsa_verified=%d,sernum=%d`, `@@mk:rsa_chip_id Do not match!`).
+
+**Extraction:** The PEM-format private key (the base64 blobs visible in the binary) can be extracted with a hex editor or the string extraction already performed in this document. The AES-CBC blob (`AES_cbc_encrypt` also present) may be a second layer used in PSK generation — separate from the RSA gate.
+
+**Impact:**
+- If the chip_id check is device-specific (embeds the device serial number at factory time), this is a per-device key and extraction from one binary doesn't generalize.
+- If the chip_id check uses a range or type match (likely for a module manufacturer shipping identical firmware to many customers), the same private key signs commands for every RC400L unit ever shipped.
+- Given Meige is a module manufacturer shipping millions of identical firmware images, the shared key scenario is far more probable. **One firmware dump = capability to forge USB switch commands for all devices using this firmware.**
+- `+MEIGEDL` (firmware download) likely goes through the same RSA gate. If so: same key = unsigned firmware flash on any device.
+
+---
+
+### CRITICAL — WiFi PSK Derived from IMEI via AES
+
+**Finding:** `+WIFIPSK` uses `AES_set_decrypt_key` + `AES_cbc_encrypt` with the device IMEI as key material. The PSK is AES-CBC encrypted and stored at `/usrdata/data/persistent/wlan/psk`. The algorithm:
+1. Gets IMEI via `qmi_dms_get_imei_num` (QMI DMS)
+2. Gets MAC address from `wireless_net` daemon via `/tmp/MY_SOCKET`
+3. Uses the IMEI (and possibly MAC) as AES key input
+4. Decrypts the stored PSK blob
+
+**Impact:** The IMEI is printed on the device label and is also returned by `AT+CGSN` over USB. The AES decryption algorithm is static in the binary. Anyone with:
+- The device IMEI (readable from 3 feet away without touching the device)
+- The firmware binary (public via EDL dump procedure described in the main README)
+
+...can reconstruct the default WiFi PSK for any RC400L unit. This is a standard "IMEI-derived default password" vulnerability class seen across countless IoT hotspot devices. If the user never changes the default PSK, the hotspot is recoverable by reading the label.
+
+**Verification path:** Extract AES key derivation logic, apply to a known IMEI, compare derived PSK against the stored blob at `/usrdata/data/persistent/wlan/psk` on the live device.
+
+---
+
+### CRITICAL — AT Command Socket Has No Authentication
+
+**Finding:** `atfwd_daemon` creates `/tmp/at-interface.srv.sock` (UNIX stream socket) and accepts incoming AT command requests over it. No `chmod` or `umask` call is visible in the binary around socket creation — the socket inherits the process umask. In `/tmp`, this defaults to world-readable and world-writable on this device.
+
+**Impact:** Any process running on the device can connect to `/tmp/at-interface.srv.sock` and inject arbitrary AT commands, including `AT+SYSCMD`. This is not gated by UID, capability, or any credential check. Relevant escalation paths:
+
+- **Stock Orbic CGI** (`qcmap_web_cgi`, `qcmap_auth`) — runs as root, but any script it calls could reach the socket
+- **busybox httpd CGI scripts** (RayTrap, or future additions) — CGI runs as the httpd process user; if httpd is launched with full caps via inittab (as it is), it can connect
+- **Any compromised process** on the device — gaining code execution as *any* UID gives a path to root via this socket without needing the inittab escape or FIFO
+- **`AT+SYSCMD` has no argument sanitization** — `popen(user_string)` directly
+
+This effectively means local privilege escalation to root is trivially available to any process that can reach `/tmp/`. Given that the Qualcomm LSM blocks many syscalls from the ADB subtree, this socket is likely a cleaner escalation path than trying to exploit the kernel.
+
+---
+
+### HIGH — `+GETSIB` Leaks Raw LTE System Information Blocks
+
+**Finding:** `AT+GETSIB` queries QMI NAS for the serving cell's SIB (System Information Block) data and returns it as raw hex: `SIB_PKT: %s`, `SIB_PKT_LEN: %d`.
+
+**What SIBs contain:**
+- **SIB1:** Cell identity, PLMN list, tracking area code (TAC), scheduling info for other SIBs, cell access restrictions
+- **SIB2:** Radio resource configuration, uplink power control params, RACH config
+- **SIB3/4/5:** Intra/inter-frequency neighbor cell lists, EARFCN, cell reselection thresholds
+- **SIB6/7:** UTRAN/GERAN neighbor cell lists (handover targets)
+
+**Security relevance:** SIB neighbor cell lists are exactly what IMSI catchers manipulate — they advertise themselves as a known neighbor to attract handover. Raw SIB access allows:
+- Mapping whether neighbor cells in SIB match real-world towers (IMSI catcher detection, complementary to Rayhunter's DIAG approach but through AT)
+- Extracting TAC for location inference without GPS
+- Enumerating handover candidate frequencies for radio frequency research
+
+**This is a direct AT alternative to the DIAG path Rayhunter uses.** Testing `AT+GETSIB` on the live device is a research priority.
+
+---
+
+### HIGH — `+PCISCAN` Exposes Neighbor Physical Cell ID List
+
+**Finding:** `AT+PCISCAN` calls `odm_lte_pci_band_scan send qmi band scan`, triggering a QMI NAS band scan. Returns a list of Physical Cell IDs detected: `odm_lte_pci_band_scan PCI NUM:%d`.
+
+**Security relevance:**
+- PCI list of detected cells reveals which base stations are physically reachable by the device's radio
+- Cross-referencing observed PCIs against known tower databases (OpenCelliD, GSMA) can detect cells with no legitimate registration — potential IMSI catchers
+- Changes in PCI list over time (periodically querying `+PCISCAN`) can detect insertion or removal of rogue cells in the RF environment
+- Again, **this data is accessible through AT without CAP_NET_RAW, without DIAG, without the `serial` binary** — directly from rootshell via `AT+PCISCAN`
+
+---
+
+### HIGH — `+MGGPIOCTRL` Has No GPIO Number Validation
+
+**Finding:** GPIO handler accepts an arbitrary GPIO number and performs export, direction set, and value read/write via sysfs. Log strings: `%s:the gpio is invalid` exists, but it's unclear what "invalid" means — likely bounds checking only, not a hardware connectivity check.
+
+**Impact:**
+- GPIOs on MDM9607 are connected to hardware peripherals: power management ICs, RF switches, LEDs, reset lines, and in some designs, cellular modem reset
+- Toggling the wrong GPIO can hard-reset the modem, kill power to a subsystem, or trigger hardware fault states
+- **No credential check** — reaches this path via the unauthenticated AT socket
+- FCC internal photos showed LED headers; if those GPIOs are accessible, this is a confirmed physical LED control vector from AT commands
+
+---
+
+### HIGH — Meige Firmware Lineage Means Shared Vulnerabilities
+
+**Finding:** Build path `/home/make/version/l7_retail_mr_zhanxun/trunk/apps_proc/cpe/qt/interface/dev/src/qt_dev_api.c` and `+MEIGEDL` confirm this firmware derives from a **Meige Technology** module reference design (M602A/M611A family).
+
+**Impact:** Meige ships identical firmware to multiple OEM customers. Vulnerabilities in this `atfwd_daemon` — the RSA key, the PSK algorithm, the unauthenticated socket — affect **every device using the same Meige module firmware**, not just the Orbic RC400L. This includes:
+- Other LTE hotspots, routers, and CPE devices using M602A/M611A
+- Industrial IoT devices using the same module
+- Any device where the OEM did not patch or replace Meige's reference `atfwd_daemon`
+
+Any public disclosure of the RSA key extraction or PSK derivation algorithm affects the entire Meige customer base.
+
+---
+
+### MEDIUM — `+FGGPSMODE` Injects Arbitrary GPS Fixes
+
+**Finding:** The GPS forge handlers accept a full 9-parameter position mode configuration and can inject arbitrary position fixes. The handler writes state to `/usrdata/gps_file` and `/usrdata/gps_flag`, then passes parameters directly to the `gps_ctl_srv` backend.
+
+**Impact:**
+- Any application on the device that uses GPS — including location-based services or network-based positioning — receives the spoofed position
+- If the device is ever used as a GPS reference for connected clients (via NMEA forwarding through the `serial_bridge` it starts to `/dev/ttyHSL1`), those clients receive the spoofed fix
+- GPS simulation with calibrated fake positions could be used to test geofencing or location-based access controls
+
+---
+
+### MEDIUM — Voice QMI Active on Data-Only Device
+
+**Finding:** The daemon registers for `QMI_VOICE` call state indications and receives them: `Voice all call status ind, len %d`, `Voice call, mode %d, dir %d, type %d call id %d, state %d`. The audio PCM mixer commands (`+PCMAUDIO`, VoLTE routing via `amix`) are also present.
+
+**Impact:**
+- The MDM9607 modem is running full voice QMI. Voice capability is not disabled at the modem level.
+- The `+PCMAUDIO` handler sets up VoLTE audio paths (`SEC_AUX_PCM_RX_Voice Mixer VoLTE`). If a voice call can be initiated via QMI_VOICE directly (not through AT+SYSCMD, but directly via `qmi_client_send_msg_sync` to the voice service), PCM audio would route through the nau8810 codec.
+- The device has no microphone exposed in the product design. However, nau8810 is wired to PCM pads — if the PCB has pads populated, it's a data capture vector.
+- Confirmed: this does **not** mean the daemon *initiates* voice calls. It only *monitors* them. But the modem stack will respond to inbound QMI_VOICE commands if sent directly.
+
+---
+
+### MEDIUM — `+WDISABLEEN` + `+SLEEPEN` Are Denial-of-Service Primitives
+
+**Finding:** `+WDISABLEEN` sends a QMI NAS command to disable the WiFi hardware radio. `+SLEEPEN` controls USB wakeup inhibit via sysfs. Both persist their state.
+
+**Impact:**
+- Any process that can reach the AT socket can disable WiFi, killing all connected clients
+- Sleep enable/disable affects USB enumeration behavior — disabling USB sleep while in a covert deployment keeps the ADB interface enumerated on a connected host without the host needing to keep the connection alive
+- Neither command requires root beyond what the AT socket already provides
+
+---
+
+### LOW — Build Infrastructure Leak
+
+**Finding:** `/home/make/version/l7_retail_mr_zhanxun/trunk/apps_proc/cpe/qt/interface/dev/src/qt_dev_api.c`
+
+This is the full SVN/internal path on the Meige build server. `l7_retail_mr` is likely a product or branch code. `zhanxun` is a developer username or team identifier. This leaks:
+- Internal codebase layout
+- SCM structure (SVN-style trunk/branch naming)
+- Product naming conventions
+
+Not directly exploitable but useful for correlating firmware across products or if Meige's internal infrastructure is ever exposed.
+
+---
+
+### Attack Chain Summary
+
+The most complete documented attack chain using only `atfwd_daemon`:
+
+```
+Physical access to label → IMEI → AES-decrypt default WiFi PSK
+  → connect to WiFi
+  → no further access gained (WiFi is client-to-internet only)
+
+USB access (before Rayhunter) → AT+SYSCMD via serial port
+  → arbitrary root shell
+
+Post-Rayhunter (ADB access) → /tmp/at-interface.srv.sock → AT+SYSCMD
+  → root shell without inittab escape (simpler than FIFO path)
+
+Firmware dump (EDL) → extract RSA private key from binary
+  → forge USB mode switch command
+  → potentially forge +MEIGEDL firmware download
+  → persistent firmware backdoor on any same-model device
+```
+
+The socket-based path (`/tmp/at-interface.srv.sock → AT+SYSCMD`) is the most significant finding for local privilege escalation — it bypasses the entire capability jail without needing any kernel exploit or inittab manipulation.
 
 ---
 
