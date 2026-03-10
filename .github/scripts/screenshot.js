@@ -1,10 +1,11 @@
 'use strict';
 
-const puppeteer = require('puppeteer');
-const http      = require('http');
-const fs        = require('fs');
-const path      = require('path');
-const { URL }   = require('url');
+const puppeteer  = require('puppeteer');
+const http       = require('http');
+const fs         = require('fs');
+const path       = require('path');
+const { URL }    = require('url');
+const { execSync } = require('child_process');
 
 const ROOT     = path.join(__dirname, '../..');
 const WWW      = path.join(ROOT, 'PortableApps/26_raytrap/raytrap/www');
@@ -182,6 +183,16 @@ async function run() {
 
   await browser.close();
   server.close();
+
+  // Build animated GIF — 3.5s per tab, loop forever, scale to 900px wide
+  console.log('Building animated GIF...');
+  const frames = TABS.map(t => path.join(ASSETS, `raytrap_${t}.png`)).join(' ');
+  const gifOut = path.join(ASSETS, 'raytrap_demo.gif');
+  execSync(
+    `convert -delay 350 -loop 0 -resize 900x -coalesce -layers Optimize ${frames} ${gifOut}`,
+    { stdio: 'inherit' }
+  );
+  console.log(`  → ${gifOut}`);
 
   // Update date comment in RayTrap.md
   const today = new Date().toISOString().slice(0, 10);

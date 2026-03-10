@@ -7,41 +7,9 @@ Developed as part of the [RC400L research project](README.md). All capabilities 
 ---
 
 <!-- screenshots-updated: 2026-03-09 -->
-<!-- UPDATE PROCESS: adb forward tcp:8889 tcp:8888 → open each tab → screenshot → save to assets/raytrap_<tab>.png → update date above -->
-<!-- TRIGGER: retake screenshots whenever PortableApps/26_raytrap/raytrap/www/ files are committed -->
+<!-- AUTO-UPDATED: .github/workflows/screenshots.yml regenerates raytrap_demo.gif on every push touching www/ -->
 
-<table>
-<tr>
-<td align="center">
-<a href="assets/raytrap_dashboard.png"><img src="assets/raytrap_dashboard.png" width="270" alt="Dashboard"></a><br>
-<a href="#dashboard"><b>Dashboard</b></a>
-</td>
-<td align="center">
-<a href="assets/raytrap_firewall.png"><img src="assets/raytrap_firewall.png" width="270" alt="Firewall"></a><br>
-<a href="#firewall"><b>Firewall</b></a>
-</td>
-<td align="center">
-<a href="assets/raytrap_proxy.png"><img src="assets/raytrap_proxy.png" width="270" alt="Proxy"></a><br>
-<a href="#proxy"><b>Proxy</b></a>
-</td>
-</tr>
-<tr>
-<td align="center">
-<a href="assets/raytrap_wifi.png"><img src="assets/raytrap_wifi.png" width="270" alt="WiFi"></a><br>
-<a href="#wifi"><b>WiFi</b></a>
-</td>
-<td align="center">
-<a href="assets/raytrap_routing.png"><img src="assets/raytrap_routing.png" width="270" alt="Routing"></a><br>
-<a href="#routing"><b>Routing</b></a>
-</td>
-<td align="center">
-<a href="assets/raytrap_capture.png"><img src="assets/raytrap_capture.png" width="270" alt="Capture"></a><br>
-<a href="#capture"><b>Capture</b></a>
-</td>
-</tr>
-</table>
-
-*Click any screenshot for full size. Click the tab name to jump to its documentation.*
+![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture](assets/raytrap_demo.gif)
 
 ---
 
