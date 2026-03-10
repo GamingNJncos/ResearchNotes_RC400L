@@ -1,0 +1,38 @@
+name: Update UI Screenshots
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PortableApps/26_raytrap/raytrap/www/**'
+
+jobs:
+  screenshots:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Take screenshots
+        run: node .github/scripts/screenshot.js
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/raytrap_*.png RayTrap.md
+          git diff --staged --quiet && echo "Screenshots unchanged, nothing to commit." && exit 0
+          git commit -m "chore: auto-update RayTrap screenshots [skip ci]"
+          git push
