@@ -216,7 +216,13 @@ tr:hover td{background:#071520}
         <input type="number" id="lnk-port-rh" value="8080" min="1" max="65535" style="width:80px" oninput="updateLinks()">
         <span class="dim" id="lnk-url-rh" style="font-size:11px"></span>
       </div>
-      <div class="dim" style="margin-top:6px">ADB users: <code>adb forward tcp:&lt;port&gt; tcp:&lt;device-port&gt;</code> to match.</div>
+      <div id="lnk-adb-hint" style="margin-top:6px;display:none">
+        <div class="dim" style="margin-bottom:4px">ADB forwards needed for these ports:</div>
+        <div class="stream-url" style="font-size:11px" id="lnk-adb-cmd">
+          <div class="slabel">Run on host <button class="copy-btn" onclick="copyText(document.getElementById('lnk-adb-cmd-text').textContent)">&#9109; Copy</button></div>
+          <span id="lnk-adb-cmd-text"></span>
+        </div>
+      </div>
     </div>
   </div>
   <div class="panel">
@@ -1442,6 +1448,14 @@ function updateLinks(){
   $('lnk-url-rh').textContent    = rhUrl;
   localStorage.setItem('rt_orbic_port', op);
   localStorage.setItem('rt_rh_port',    rp);
+  // Show ADB forward commands when accessing via localhost
+  if(h === '127.0.0.1' || h === 'localhost'){
+    var cmd = 'adb forward tcp:'+op+' tcp:80 && adb forward tcp:'+rp+' tcp:8080';
+    $('lnk-adb-cmd-text').textContent = cmd;
+    $('lnk-adb-hint').style.display = '';
+  } else {
+    $('lnk-adb-hint').style.display = 'none';
+  }
 }
 
 function initLinks(){
