@@ -31,11 +31,42 @@ jobs:
       - name: Take screenshots
         run: node .github/scripts/screenshot.js
 
+      - name: Build animated GIF
+        run: |
+          cd assets
+          cat > _concat.txt << 'EOF'
+          file 'raytrap_dashboard.png'
+          duration 3.5
+          file 'raytrap_firewall.png'
+          duration 3.5
+          file 'raytrap_proxy.png'
+          duration 3.5
+          file 'raytrap_wifi.png'
+          duration 3.5
+          file 'raytrap_routing.png'
+          duration 3.5
+          file 'raytrap_capture.png'
+          duration 3.5
+          file 'raytrap_capture.png'
+          EOF
+          ffmpeg -y -f concat -safe 0 -i _concat.txt \
+            -vf "scale=900:-1:flags=lanczos,palettegen=max_colors=128" \
+            _palette.png
+          ffmpeg -y -f concat -safe 0 -i _concat.txt -i _palette.png \
+            -filter_complex "scale=900:-1:flags=lanczos[x];[x][1:v]paletteuse" \
+            -loop 0 raytrap_demo.gif
+          rm _concat.txt _palette.png
+
+      - name: Update screenshot date in RayTrap.md
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          sed -i "s/<!-- screenshots-updated: [0-9-]* -->/<!-- screenshots-updated: $TODAY -->/" RayTrap.md
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add assets/raytrap_*.png assets/raytrap_demo.gif RayTrap.md
-          git diff --staged --quiet && echo "Screenshots unchanged, nothing to commit." && exit 0
+          git diff --staged --quiet && echo "No changes." && exit 0
           git commit -m "chore: auto-update RayTrap screenshots [skip ci]"
           git push
