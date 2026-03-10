@@ -1,17 +1,17 @@
 'use strict';
 
-const puppeteer  = require('puppeteer');
-const http       = require('http');
-const fs         = require('fs');
-const path       = require('path');
-const { URL }    = require('url');
+const puppeteer    = require('puppeteer');
+const http         = require('http');
+const fs           = require('fs');
+const path         = require('path');
+const { URL }      = require('url');
 const { execSync } = require('child_process');
 
-const ROOT     = path.join(__dirname, '../..');
-const WWW      = path.join(ROOT, 'PortableApps/26_raytrap/raytrap/www');
-const ASSETS   = path.join(ROOT, 'assets');
-const MD_FILE  = path.join(ROOT, 'RayTrap.md');
-const PORT     = 3737;
+const ROOT    = path.join(__dirname, '../..');
+const WWW     = path.join(ROOT, 'PortableApps/26_raytrap/raytrap/www');
+const ASSETS  = path.join(ROOT, 'assets');
+const MD_FILE = path.join(ROOT, 'RayTrap.md');
+const PORT    = 3737;
 
 // ── Mock CGI responses ─────────────────────────────────────────────────────────
 
@@ -150,23 +150,69 @@ const server = http.createServer((req, res) => {
   serveStatic(res, pathname);
 });
 
+// ── Build GIF with ffmpeg ──────────────────────────────────────────────────────
+
+function buildGif(tabs) {
+  const gifOut    = path.join(ASSETS, 'raytrap_demo.gif');
+  const concatTxt = path.join(ASSETS, '_concat.txt');
+
+  // Write concat file — list each frame with duration, repeat last frame to
+  // hold it before loop (ffmpeg requires the last entry twice)
+  const lines = [];
+  for (const tab of tabs) {
+    lines.push(`file '${path.join(ASSETS, `raytrap_${tab}.png`)}'`);
+    lines.push('duration 3.5');
+  }
+  // Duplicate last entry (ffmpeg concat needs it for final frame duration)
+  lines.push(`file '${path.join(ASSETS, `raytrap_${tabs[tabs.length - 1]}.png`)}'`);
+  fs.writeFileSync(concatTxt, lines.join('\n'));
+
+  // Two-pass palette GIF via ffmpeg — much better quality than ImageMagick
+  // Pass 1: generate optimal palette; Pass 2: apply it
+  const palettePng = path.join(ASSETS, '_palette.png');
+  const scale      = 'scale=900:-1:flags=lanczos';
+
+  execSync(
+    `ffmpeg -y -f concat -safe 0 -i "${concatTxt}" -vf "${scale},palettegen=max_colors=128" "${palettePng}"`,
+    { stdio: 'inherit' }
+  );
+  execSync(
+    `ffmpeg -y -f concat -safe 0 -i "${concatTxt}" -i "${palettePng}" -filter_complex "${scale}[x];[x][1:v]paletteuse" -loop 0 "${gifOut}"`,
+    { stdio: 'inherit' }
+  );
+
+  fs.unlinkSync(concatTxt);
+  fs.unlinkSync(palettePng);
+  console.log(`  → ${gifOut}`);
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 const TABS = ['dashboard', 'firewall', 'proxy', 'wifi', 'routing', 'capture'];
 
 async function run() {
+  console.log('WWW dir:', WWW);
+  console.log('index.html exists:', fs.existsSync(path.join(WWW, 'index.html')));
+
   await new Promise(r => server.listen(PORT, r));
   console.log(`Mock server on :${PORT}`);
 
+  console.log('Launching browser...');
   const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ],
     defaultViewport: { width:1440, height:900 }
   });
 
   const page = await browser.newPage();
-  page.on('console', () => {});
-  page.on('pageerror', () => {});
+  page.on('console', msg => console.log('  [page]', msg.text()));
+  page.on('pageerror', err => console.error('  [page error]', err.message));
 
+  console.log('Loading page...');
   await page.goto(`http://localhost:${PORT}/`, { waitUntil:'networkidle0', timeout:30000 });
 
   for (const tab of TABS) {
@@ -175,34 +221,23 @@ async function run() {
       await page.click(`nav button[data-tab="${tab}"]`);
       await page.waitForNetworkIdle({ idleTime:600, timeout:15000 }).catch(() => {});
     }
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 600));
     const out = path.join(ASSETS, `raytrap_${tab}.png`);
     await page.screenshot({ path: out });
-    console.log(`    → ${out}`);
+    console.log(`    saved ${out}`);
   }
 
   await browser.close();
   server.close();
 
-  // Build animated GIF — 3.5s per tab, loop forever, scale to 900px wide
-  console.log('Building animated GIF...');
-  const frames = TABS.map(t => path.join(ASSETS, `raytrap_${t}.png`)).join(' ');
-  const gifOut = path.join(ASSETS, 'raytrap_demo.gif');
-  execSync(
-    `convert -delay 350 -loop 0 -resize 900x -coalesce -layers Optimize ${frames} ${gifOut}`,
-    { stdio: 'inherit' }
-  );
-  console.log(`  → ${gifOut}`);
+  console.log('Building GIF with ffmpeg...');
+  buildGif(TABS);
 
-  // Update date comment in RayTrap.md
-  const today = new Date().toISOString().slice(0, 10);
-  const md    = fs.readFileSync(MD_FILE, 'utf8');
-  const updated = md.replace(
-    /<!-- screenshots-updated: [\d-]+ -->/,
-    `<!-- screenshots-updated: ${today} -->`
-  );
+  const today   = new Date().toISOString().slice(0, 10);
+  const md      = fs.readFileSync(MD_FILE, 'utf8');
+  const updated = md.replace(/<!-- screenshots-updated: [\d-]+ -->/, `<!-- screenshots-updated: ${today} -->`);
   fs.writeFileSync(MD_FILE, updated);
-  console.log(`Updated RayTrap.md date to ${today}`);
+  console.log(`RayTrap.md date updated to ${today}`);
 }
 
-run().catch(e => { console.error(e); process.exit(1); });
+run().catch(e => { console.error('FATAL:', e); process.exit(1); });
