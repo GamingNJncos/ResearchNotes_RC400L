@@ -173,11 +173,3 @@ The recoveryfs ships `fbset` and `fbsplash` at `/sbin/`:
 These are NOT present in the system rootfs. The `fbsplash` binary in recoveryfs is used to show "Updating..." during OTA. Format expected by `fbsplash` is typically raw or PPM — not confirmed for this device.
 
 ---
-
-## Open Questions
-
-- [ ] What does the stock Qt UI actually render? (requires running device with qt_daemon, not rayhunter)
-- [ ] Can `fbset` be pushed to `/cache/bin/` from recoveryfs and used in normal mode?
-- [ ] Does the FBTFT driver support ioctl for partial updates, or is full-frame write only?
-- [ ] What is the actual SPI/I2C bus and controller chip behind the LCD panel?
-- [ ] GIF animation timing: does rayhunter sleep between frames properly, or does the 1s refresh loop interrupt mid-animation?

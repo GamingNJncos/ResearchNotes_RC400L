@@ -424,7 +424,7 @@ Rayhunter's serial binary uses `0xF626` as the USB composition value. But `/etc/
 cat /data/usb/boot_hsusb_composition
 ```
 
-This file defines ~20 USB state modes. The discrepancy between `F622` and `F626` is worth noting — it suggests Rayhunter made a deliberate choice about which USB interface profile to expose. Whether this matters for anything beyond driver compatibility on the host side is an open question.
+This file defines ~20 USB state modes. The discrepancy between `F622` and `F626` is worth noting — it suggests Rayhunter made a deliberate choice about which USB interface profile to expose. Whether this matters for anything beyond driver compatibility on the host side has not been tested.
 
 ![](assets/image13.png)
 
@@ -920,13 +920,6 @@ libssl.so.1.0.0    — present on Orbic
 **Why this matters:**
 
 The Orbic already has its own `tr069` binary in its rootfs. That's worth investigating separately — but cwmpCPE running on the Orbic creates an interesting scenario: pointing it at a local ACS (e.g., GenieACS, OpenACS) for full remote management via a protocol the carrier themselves trust.
-
-**Open questions:**
-- What ACS server does the Orbic's existing `tr069` binary connect to by default?
-- Can cwmpCPE be redirected to a local/controlled ACS?
-- What TR-181 parameters does the JMR540 expose over CWMP?
-- Does `libfwupgrade.so` assume Foxconn partition layout? If so, calling firmware upgrade RPCs from a local ACS on the Orbic could be destructive.
-- What's the security model — mutual TLS? HTTP Digest? Open?
 
 **Security implications:**
 

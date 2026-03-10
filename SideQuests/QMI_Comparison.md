@@ -195,10 +195,3 @@ JMR540 ships a complete QMI ping test suite for verifying end-to-end QMI transpo
 5. **CPU runs faster on RC400L** — hispeed frequency 998400 Hz vs 800000 Hz on JMR540. Different product target; Orbic may prioritize throughput over battery life.
 
 ---
-
-## Next Steps
-
-- Start `mcm_ril_service` on RC400L via inittab, test whether it can register with qmuxd
-- Compare `MCM_ATCOP_CLI` command surface against native `atfwd_daemon` AT commands
-- Use `QMI_AT` service via qmuxd to directly test AT command forwarding (bypass atfwd_daemon)
-- Cross-reference QMI_NAS message IDs for GETSIB/PCISCAN against Qualcomm MSM Interface headers
