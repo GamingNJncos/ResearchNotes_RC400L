@@ -1051,12 +1051,8 @@ tr:hover td{background:#071520}
       <h3>USB Composition Mode</h3>
     </div>
     <div class="panel-body">
-      <p style="color:#3a6080;font-size:11px;margin-bottom:12px;line-height:1.6">
-        Each number is the <strong>mode index</strong> passed to <code>boot_hsusb_composition</code> — the script reads <code>/usrdata/mode.cfg</code> at boot and calls <code>switch_fun &lt;mode&gt;</code> which sets the matching sysfs composition.
-        <strong>Click a row to select it.</strong>
-        "Save Persistent" writes the number to <code>mode.cfg</code> (survives all reboots).
-        "Next Boot Only" writes <code>mode_tmp.cfg</code> (one-shot, consumed at boot, then reverts to mode.cfg).
-        "Apply Now" writes sysfs directly — USB drops for ~2 s.
+      <p style="color:#3a6080;font-size:11px;margin-bottom:12px">
+        Mode number is saved to <code>/usrdata/mode.cfg</code>. Apply Now will disconnect USB for several seconds.
       </p>
       <div style="display:grid;grid-template-columns:36px 1fr auto;gap:10px;padding:4px 12px 6px;font-size:10px;color:#2a5070;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #0d2035;margin-bottom:6px">
         <div style="text-align:center">Mode #<br><span style="color:#1a3a50;font-size:9px">(→ mode.cfg)</span></div>
