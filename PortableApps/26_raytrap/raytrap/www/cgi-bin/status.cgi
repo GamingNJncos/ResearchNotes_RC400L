@@ -54,6 +54,14 @@ if [ -d /sys/class/net/wlan1 ]; then
     WLAN1_IP=$(ip addr show wlan1 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
 fi
 
+# ── rmnet0 state ──────────────────────────────────────────────────────────────
+RMNET0_UP=false
+RMNET0_IP=""
+if [ -d /sys/class/net/rmnet0 ]; then
+    RMNET0_UP=true
+    RMNET0_IP=$(ip addr show rmnet0 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
+fi
+
 # ── tcpdump running ───────────────────────────────────────────────────────────
 CAP_RUN=false
 [ -f /cache/raytrap/captures/tcpdump.pid ] && \
@@ -89,6 +97,8 @@ printf '"wpa_pid":%s,' "${WPA_PID:-null}"
 printf '"wlan1_up":%s,' "$WLAN1_UP"
 printf '"wlan1_state":%s,' "$(jstr "$WLAN1_STATE")"
 printf '"wlan1_ip":%s,' "$(jstr "$WLAN1_IP")"
+printf '"rmnet0_up":%s,' "$RMNET0_UP"
+printf '"rmnet0_ip":%s,' "$(jstr "$RMNET0_IP")"
 printf '"cap_running":%s,' "$CAP_RUN"
 printf '"rule_count":%d,' "$RULE_COUNT"
 printf '"uptime":%s,' "$(jstr "$UPTIME")"

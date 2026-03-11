@@ -244,6 +244,7 @@ tr:hover td{background:#071520}
     <div class="svc-card"><div class="name">wpa_supplicant</div><div class="val off" id="dc-wpa">—</div><div class="meta" id="dc-wpa-meta"></div></div>
     <div class="svc-card"><div class="name">thttpd (RayTrap)</div><div class="val ok">RUNNING</div><div class="meta">port 8888</div></div>
     <div class="svc-card"><div class="name">wlan1 (STA)</div><div class="val off" id="dc-wlan1">—</div><div class="meta" id="dc-wlan1-meta"></div></div>
+    <div class="svc-card"><div class="name">rmnet0 (LTE)</div><div class="val off" id="dc-rmnet0">—</div><div class="meta" id="dc-rmnet0-meta"></div></div>
     <div class="svc-card"><div class="name">Active Rules</div><div class="val" id="dc-rules">—</div><div class="meta">ORBIC chains</div></div>
   </div>
   <div class="panel">
@@ -499,7 +500,7 @@ tr:hover td{background:#071520}
         <div class="form-row"><label>Gateway</label><input id="wf-static-gw" placeholder="192.168.1.1"></div>
         <div class="form-row"><label></label><button class="btn primary" onclick="wlanApplyStatic()">Apply Static</button></div>
       </div>
-      <p class="form-help">DHCP uses dhcpcd on wlan1. Static assigns address directly — gateway route added at metric 200 (LTE stays primary at metric 0).</p>
+      <p class="form-help">DHCP uses dhcpcd on wlan1 (metric 200). Static assigns address directly at metric 200. Both methods yield to any lower-metric LTE route on rmnet0.</p>
       <div id="wf-routing-hint" style="display:none;margin-top:10px;padding:10px 12px;background:#071825;border:1px solid #0d4060;border-radius:4px;font-size:12px">
         &#9432; wlan1 has an IP. To route specific AP clients through wlan1 instead of LTE:
         <button class="btn sm" style="margin-left:8px" onclick="switchTab('routing')">&#9654; Open Routing Tab</button>
@@ -1161,6 +1162,7 @@ async function loadDash(){
   setSvc('dc-proxy','dc-proxy-meta', s.proxy_running, s.proxy_running?'RUNNING':'STOPPED', s.proxy_pid?'PID '+s.proxy_pid:'');
   setSvc('dc-wpa','dc-wpa-meta', s.wpa_running, s.wpa_running?'RUNNING':'STOPPED', s.wpa_pid?'PID '+s.wpa_pid:'');
   setSvc('dc-wlan1','dc-wlan1-meta', s.wlan1_up, s.wlan1_state||'DOWN', s.wlan1_ip||'');
+  setSvc('dc-rmnet0','dc-rmnet0-meta', s.rmnet0_up, s.rmnet0_up?'UP':'DOWN', s.rmnet0_ip||'');
   $('dc-rules').textContent = s.rule_count != null ? s.rule_count : '—';
   $('dc-rules').className = 'val';
 
@@ -1279,13 +1281,13 @@ async function loadProxy(){
 
 async function proxyAction(act){
   const d = await api('proxy.cgi', null, 'POST', encode({action:act}));
-  if(d.ok){ toast(act==='start'?'tinyproxy started':'tinyproxy stopped'); setTimeout(loadProxy,1500); }
+  if(d.ok){ toast(act==='start'?'tinyproxy started':'tinyproxy stopped'); setTimeout(()=>{loadProxy();loadDash();},1500); }
   else { toast('Error: '+d.error, true); }
 }
 
 async function setTransparent(on){
   const d = await api('proxy.cgi', null, 'POST', encode({action: on?'enable_transparent':'disable_transparent'}));
-  if(d.ok){ toast(on?'Transparent proxy enabled':'Transparent proxy disabled'); loadProxy(); }
+  if(d.ok){ toast(on?'Transparent proxy enabled':'Transparent proxy disabled'); loadProxy(); loadDash(); }
   else { toast('Error: '+d.error, true); $('px-transp-toggle').checked = !on; }
 }
 
@@ -1337,6 +1339,13 @@ async function loadWifi(){
   $('wf-ap-band-5').className  = 'btn sm'+(s.ap_band==='5'?' primary':'');
   $('wf-raw').textContent = s.raw||'';
   _updateIpModeUi(s);
+
+  // rmnet0 conflict warning — shown when RMNET USB mode is active alongside wlan1 STA
+  if(s.rmnet_active && s.wpa_state === 'COMPLETED'){
+    alert2('wifi-alert','rmnet0 (USB RMNET mode) has an active default route alongside wlan1 STA. wlan1 routes are at metric 200 — LTE stays primary. If routing breaks, check: ip route show',false);
+  } else {
+    alert2('wifi-alert','');
+  }
 
   const nets = s.networks||[];
   const tbody = $('wf-networks');
@@ -1414,8 +1423,14 @@ async function wlanSetDhcp(){
   if(!_wpaRunning){ toast('Start wpa_supplicant first',true); return; }
   toast('Starting dhcpcd on wlan1...');
   const d = await api('wifi.cgi',null,'POST',encode({action:'set_ip_dhcp'}));
-  if(d.ok){ toast('DHCP active — IP: '+(d.data.ip_address||'waiting...')); setTimeout(loadWifi,2000); }
-  else { toast('Error: '+d.error,true); }
+  if(d.ok){
+    const ip = d.data.ip_address||'waiting...';
+    const msg = d.data.rmnet_conflict
+      ? 'DHCP active — IP: '+ip+' (rmnet0 also active — wlan1 at metric 200, LTE stays primary)'
+      : 'DHCP active — IP: '+ip;
+    toast(msg);
+    setTimeout(loadWifi,2000);
+  } else { toast('Error: '+d.error,true); }
 }
 
 function wlanShowStatic(){

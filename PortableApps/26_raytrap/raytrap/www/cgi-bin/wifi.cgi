@@ -46,6 +46,12 @@ find_dhcpcd() {
     done
 }
 
+# Returns 0 (true) if rmnet0 interface exists AND has a default route
+rmnet_active() {
+    ip link show rmnet0 >/dev/null 2>&1 && \
+        ip route show dev rmnet0 2>/dev/null | grep -q '^default'
+}
+
 wpa() { $WPA_CLI -i "$IFACE" "$@" 2>/dev/null; }
 
 # Run command via ipt daemon (needed for CAP_NET_ADMIN ops like ip addr/route)
@@ -95,6 +101,9 @@ if [ "$ACTION" = "status" ]; then
         STATIC_GW=$(cat "$IP_MODE_FILE" 2>/dev/null | awk '{print $3}')
     fi
 
+    # rmnet0 conflict check — true if rmnet0 has a default route alongside wlan1
+    RMNET_ACTIVE=false; rmnet_active && RMNET_ACTIVE=true
+
     # Networks list — use temp file to avoid pipe-subshell variable loss
     NETS_RAW=$(wpa list_networks 2>/dev/null)
     NETTMP=/tmp/wifi_nets_$$.json
@@ -117,12 +126,12 @@ EOF
     rm -f "$NETTMP"
     RAW_ESC=$(echo "$RAW" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' '|' | sed 's/|/\\n/g')
 
-    printf '{"ok":true,"data":{"wpa_running":%s,"wpa_pid":%s,"wpa_state":%s,"ssid":%s,"ip_address":%s,"freq":%s,"sta_band":%s,"ap_band":%s,"ap_channel":%s,"ip_mode":%s,"dhcp_running":%s,"static_ip":%s,"static_gw":%s,"networks":[%s],"raw":"%s"}}\n' \
+    printf '{"ok":true,"data":{"wpa_running":%s,"wpa_pid":%s,"wpa_state":%s,"ssid":%s,"ip_address":%s,"freq":%s,"sta_band":%s,"ap_band":%s,"ap_channel":%s,"ip_mode":%s,"dhcp_running":%s,"static_ip":%s,"static_gw":%s,"rmnet_active":%s,"networks":[%s],"raw":"%s"}}\n' \
         "$WPA_RUN" "${WPA_PID:-null}" \
         "$(jstr "$WPA_STATE")" "$(jstr "$SSID")" "$(jstr "$IP")" \
         "${FREQ:-null}" "$(jstr "$STA_BAND")" "$(jstr "$AP_BAND")" "${AP_CHANNEL:-null}" \
         "$(jstr "$IP_MODE")" "$DHCP_RUN" "$(jstr "$STATIC_IP")" "$(jstr "$STATIC_GW")" \
-        "$NETS" "$RAW_ESC"
+        "$RMNET_ACTIVE" "$NETS" "$RAW_ESC"
     exit 0
 fi
 
@@ -274,15 +283,16 @@ if [ "$ACTION" = "set_ip_dhcp" ]; then
     ipt ip addr flush dev "$IFACE"
     ipt ip route flush dev "$IFACE"
 
-    # Start dhcpcd (self-contained: sets IP, gateway, DNS)
-    ipt dhcpcd -b "$IFACE"
+    # Start dhcpcd with metric 200 so wlan1 routes yield to any lower-metric LTE route on rmnet0
+    ipt dhcpcd -b -m 200 "$IFACE"
 
     echo "dhcp" > "$IP_MODE_FILE"
     sleep 3
 
     DHCP_PID=$(find_dhcpcd)
     IP=$(ip addr show "$IFACE" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
-    ok "{\"dhcp_running\":$([ -n "$DHCP_PID" ] && echo true || echo false),\"ip_address\":$(jstr "$IP")}"
+    RMNET_CONFLICT=false; rmnet_active && RMNET_CONFLICT=true
+    ok "{\"dhcp_running\":$([ -n "$DHCP_PID" ] && echo true || echo false),\"ip_address\":$(jstr "$IP"),\"rmnet_conflict\":$RMNET_CONFLICT}"
     exit 0
 fi
 
