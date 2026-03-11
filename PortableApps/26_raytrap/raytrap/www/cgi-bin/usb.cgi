@@ -37,13 +37,14 @@ if [ "$ACTION" = "status" ]; then
     ENABLED=$(cat "$USB/enable" 2>/dev/null)
     MODE=$(cat "$MODE_CFG" 2>/dev/null | tr -d '[:space:]')
     TMP=$(cat "$MODE_TMP" 2>/dev/null | tr -d '[:space:]')
+    APPLIED=$(cat /usrdata/mode 2>/dev/null | tr -d '[:space:]')
 
     DIAG_LIVE=false
     printf '%s' "$FUNCS" | grep -q 'diag' && DIAG_LIVE=true
 
-    printf '{"ok":true,"data":{"functions":%s,"product_id":%s,"vendor_id":%s,"enabled":%s,"mode":%s,"tmp_mode":%s,"diag_live":%s}}\n' \
+    printf '{"ok":true,"data":{"functions":%s,"product_id":%s,"vendor_id":%s,"enabled":%s,"mode":%s,"tmp_mode":%s,"applied_mode":%s,"diag_live":%s}}\n' \
         "$(jstr "$FUNCS")" "$(jstr "$PID")" "$(jstr "$VID")" "$(jbool "$ENABLED")" \
-        "$(jstr "$MODE")" "$(jstr "$TMP")" "$DIAG_LIVE"
+        "$(jstr "$MODE")" "$(jstr "$TMP")" "$(jstr "$APPLIED")" "$DIAG_LIVE"
     exit 0
 fi
 
@@ -146,7 +147,9 @@ if [ "$ACTION" = "live_apply" ]; then
          echo 1 > "$USB/enable"
          /etc/init.d/adbd start >/dev/null 2>&1
          ;;
-     esac) </dev/null >/dev/null 2>&1 &
+     esac
+     # Keep /usrdata/mode in sync with what was just applied
+     echo "$MODE" > /usrdata/mode) </dev/null >/dev/null 2>&1 &
 
     ok "{\"mode\":$MODE,\"applying\":true,\"delay_sec\":3}"
     exit 0
