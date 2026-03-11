@@ -2,8 +2,8 @@
 # deploy.sh — RayTrap unified web interface installer
 # RC400L / Orbic MDM9607
 #
-# SELF-CONTAINED: bundles tinyproxy, tcpdump, libpcap, and ipt daemon scripts.
-# Web server: uses busybox httpd (built into device busybox — no binary needed).
+# SELF-CONTAINED: bundles tinyproxy, tcpdump, libpcap, ipt daemon scripts,
+# and rayhunter v0.10.2 (musl static armv7).
 #
 # USAGE (from PC, repo root):
 #   adb push PortableApps/26_raytrap /data/tmp/raytrap
@@ -14,12 +14,19 @@
 # WHAT THIS INSTALLS:
 #   1. tinyproxy, tcpdump, libpcap.so.1  → /cache/bin/, /cache/lib/
 #   2. ipt daemon (ipt_daemon.sh etc.)   → /cache/ipt/  (starts via inittab)
-#   3. RayTrap web files + CGIs          → /cache/raytrap/www/
-#   4. raytrap_daemon init script        → /etc/init.d/raytrap_daemon
-#   5. misc-daemon boot hook             → raytrap starts after modem ONLINE
-#   6. Rayhunter started if not running  → /etc/init.d/rayhunter_daemon start
+#   3. rayhunter v0.10.2                 → /data/rayhunter/  (if missing or broken)
+#   4. RayTrap web files + CGIs          → /cache/raytrap/www/
+#   5. raytrap_daemon init script        → /etc/init.d/raytrap_daemon
+#   6. misc-daemon boot hook             → raytrap starts after modem ONLINE
 #
-# REPORTS COMPLETE ONLY WHEN ALL SERVICES ARE VERIFIED RUNNING.
+# RAYHUNTER HANDLING:
+#   - Not installed            → installs bundled v0.10.2 + config + init script
+#   - glibc binary (segfaults) → detects and replaces with bundled musl static
+#   - Old/stock musl binary    → upgrades to bundled v0.10.2
+#   - Fork binary (/api/stream)→ keeps as-is (already enhanced)
+#   - Already running          → verifies API responds and keeps running
+#
+# REPORTS COMPLETE ONLY WHEN ALL SERVICES ARE VERIFIED RUNNING AND RESPONDING.
 
 SRC=/data/tmp/raytrap/raytrap
 DEST=/cache/raytrap
@@ -34,6 +41,15 @@ INITTAB=/etc/inittab
 PIDFILE=/tmp/raytrap_httpd.pid
 IPT_DIR=/cache/ipt
 IPT_FIFO=/cache/ipt/cmd.fifo
+RH_BIN=/data/rayhunter/rayhunter-daemon
+RH_CFG=/data/rayhunter/config.toml
+RH_QMDL=/data/rayhunter/qmdl
+RH_LOG=/data/rayhunter/rayhunter.log
+RH_INITD=/etc/init.d/rayhunter_daemon
+RH_PORT=8080
+BUNDLED_RH=$SRC/rayhunter-daemon-bin
+BUNDLED_RH_INITD=$SRC/rayhunter_daemon_init
+BUNDLED_RH_VERSION="v0.10.2"
 
 ok()   { echo "  [+] $*"; }
 info() { echo "  [*] $*"; }
@@ -43,15 +59,60 @@ hdr()  { echo ""; echo "=== $* ==="; }
 FAIL=0
 fail() { err "$*"; FAIL=1; }
 
+# Helper: check if rayhunter-daemon process is running; echo PID if yes
+rh_pid() {
+    for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
+        cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
+        case "$cmd" in *rayhunter-daemon*) echo "$p"; return 0;; esac
+    done
+    return 1
+}
+
+# Helper: probe rayhunter binary without starting the server
+# Returns 0=works, 1=segfault/crash, 2=not found
+rh_probe() {
+    local bin="${1:-$RH_BIN}"
+    [ ! -f "$bin" ] && return 2
+    # Run with a bogus config path — binary will fail on missing file (exit 1)
+    # but a glibc-incompatible binary will SIGSEGV (exit 139) or SIGILL (exit 132)
+    timeout 3 "$bin" /nonexistent_rh_probe.toml >/tmp/rh_probe.txt 2>&1
+    local ret=$?
+    rm -f /tmp/rh_probe.txt
+    if [ "$ret" -eq 139 ] || [ "$ret" -eq 132 ] || [ "$ret" -eq 134 ]; then
+        return 1  # crash
+    fi
+    return 0  # worked (config-not-found error is expected and fine)
+}
+
+# Helper: check if rayhunter API responds on RH_PORT; echo detected type
+rh_api_check() {
+    local result
+    result=$(wget -q -O - --timeout=3 "http://127.0.0.1:$RH_PORT/api/system-stats" 2>/dev/null)
+    if echo "$result" | grep -q "disk_bytes_available\|system_stats\|cpu"; then
+        # Has /api/stream? → it's our fork
+        local stream
+        stream=$(wget -q -O - --timeout=2 "http://127.0.0.1:$RH_PORT/api/stream" \
+                 --spider 2>&1 | head -3)
+        if echo "$stream" | grep -q "200\|chunked"; then
+            echo "fork"
+        else
+            echo "stock"
+        fi
+        return 0
+    fi
+    return 1
+}
+
 echo ""
 echo "========================================"
 echo " RayTrap Web Interface Installer"
 echo " RC400L / Orbic MDM9607"
 echo "========================================"
-echo " src   : $SRC"
-echo " dest  : $DEST"
-echo " port  : 8888"
-echo " httpd : busybox httpd (built-in)"
+echo " src     : $SRC"
+echo " dest    : $DEST"
+echo " port    : 8888"
+echo " httpd   : busybox httpd (built-in)"
+echo " bundled : rayhunter $BUNDLED_RH_VERSION (musl static armv7)"
 echo ""
 
 # ── [1] Preflight: verify package is complete ─────────────────────────────────
@@ -81,7 +142,8 @@ for f in tinyproxy tcpdump libpcap.so.1 raytrap_daemon start.sh \
           www/cgi-bin/routing.cgi www/cgi-bin/capture.cgi \
           www/cgi-bin/diag.cgi www/cgi-bin/at.cgi \
           www/cgi-bin/usb.cgi \
-          ipt/ipt_daemon.sh ipt/ipt_ctl.sh ipt/ipt_rules.sh; do
+          ipt/ipt_daemon.sh ipt/ipt_ctl.sh ipt/ipt_rules.sh \
+          rayhunter-daemon-bin rayhunter_daemon_init; do
     if [ ! -f "$SRC/$f" ]; then
         err "Missing from package: $f"
         MISSING=1
@@ -110,7 +172,6 @@ done
 hdr "3. Installing binaries"
 
 mkdir -p "$CACHE_BIN" "$CACHE_LIB"
-
 cp "$SRC/tinyproxy"    "$TINYPROXY" && chmod 755 "$TINYPROXY" && ok "tinyproxy → $TINYPROXY"
 cp "$SRC/tcpdump"      "$TCPDUMP"   && chmod 755 "$TCPDUMP"   && ok "tcpdump → $TCPDUMP"
 cp "$SRC/libpcap.so.1" "$LIBPCAP"   && chmod 644 "$LIBPCAP"   && ok "libpcap.so.1 → $LIBPCAP"
@@ -120,7 +181,6 @@ hdr "4. Deploying iptables daemon"
 
 mkdir -p "$IPT_DIR"
 
-# Install scripts (CRLF-safe)
 for f in ipt_daemon.sh ipt_ctl.sh ipt_rules.sh; do
     cp "$SRC/ipt/$f" "$IPT_DIR/$f"
     tr -d '\r' < "$IPT_DIR/$f" > /tmp/ipt_strip && cp /tmp/ipt_strip "$IPT_DIR/$f" && rm -f /tmp/ipt_strip
@@ -128,7 +188,6 @@ for f in ipt_daemon.sh ipt_ctl.sh ipt_rules.sh; do
     ok "Installed: $IPT_DIR/$f"
 done
 
-# Create live rules.sh only if not already present (preserve user edits)
 if [ ! -f "$IPT_DIR/rules.sh" ]; then
     cp "$IPT_DIR/ipt_rules.sh" "$IPT_DIR/rules.sh"
     chmod 755 "$IPT_DIR/rules.sh"
@@ -144,7 +203,7 @@ rm -f /data/tmp/inittab.ipdm.new
 echo "ipdm:5:respawn:/bin/sh /cache/ipt/ipt_daemon.sh" >> "$INITTAB"
 ok "inittab: ipdm respawn entry added"
 
-# Kill any stale ipt_daemon instance
+# Kill stale ipt_daemon instance if any
 if [ -f "$IPT_DIR/daemon.pid" ]; then
     OLD_PID=$(cat "$IPT_DIR/daemon.pid" 2>/dev/null)
     [ -n "$OLD_PID" ] && [ -d "/proc/$OLD_PID" ] && kill "$OLD_PID" 2>/dev/null && ok "Stopped old ipt_daemon PID=$OLD_PID"
@@ -171,14 +230,215 @@ else
     ok "ipt daemon running PID=$DPID CapEff=$CAPEFF"
 fi
 
-# ── [5] Create raytrap directory layout ───────────────────────────────────────
-hdr "5. Creating /cache/raytrap/"
+# ── [5] Rayhunter detection and setup ─────────────────────────────────────────
+hdr "5. Rayhunter detection and setup"
+
+RH_STATUS="unknown"   # not_found | glibc_crash | static_ok | fork_ok
+RH_REPLACED=0
+
+if [ ! -f "$RH_BIN" ]; then
+    RH_STATUS="not_found"
+    info "rayhunter binary NOT found at $RH_BIN"
+else
+    info "Probing rayhunter binary compatibility..."
+    rh_probe "$RH_BIN"
+    PROBE_RET=$?
+    if [ "$PROBE_RET" -eq 1 ]; then
+        RH_STATUS="glibc_crash"
+        err "rayhunter binary crashes on startup (SIGSEGV/SIGILL)"
+        err "Binary is likely a glibc dynamic build incompatible with this device's libc"
+    elif [ "$PROBE_RET" -eq 0 ]; then
+        RH_STATUS="static_ok"
+        ok "rayhunter binary probe: functional (static/musl build)"
+    fi
+fi
+
+# Determine if we need to install/replace
+RH_NEEDS_INSTALL=0
+case "$RH_STATUS" in
+    not_found)
+        info "Action: INSTALL bundled $BUNDLED_RH_VERSION (device has no rayhunter)"
+        RH_NEEDS_INSTALL=1
+        ;;
+    glibc_crash)
+        info "Action: REPLACE with bundled $BUNDLED_RH_VERSION (musl static, no glibc dependency)"
+        RH_NEEDS_INSTALL=1
+        ;;
+    static_ok)
+        ok "Action: KEEP existing binary (already functional)"
+        ;;
+esac
+
+if [ "$RH_NEEDS_INSTALL" = "1" ]; then
+    if [ ! -f "$BUNDLED_RH" ]; then
+        fail "Bundled rayhunter binary missing from package — cannot install"
+        info "Manual install: https://github.com/EFForg/rayhunter/releases"
+        info "  Download: rayhunter-$BUNDLED_RH_VERSION-linux-armv7.zip"
+        info "  Extract rayhunter-daemon, then:"
+        info "  adb push rayhunter-daemon //data/rayhunter/rayhunter-daemon"
+    else
+        mkdir -p "$RH_QMDL"
+        # Use cp + ipt FIFO for atomic replace (avoids partial-write on existing file)
+        cp "$BUNDLED_RH" /data/tmp/rh_new_bin
+        echo "cp /data/tmp/rh_new_bin $RH_BIN && chmod 755 $RH_BIN && rm -f /data/tmp/rh_new_bin" > "$IPT_FIFO" 2>/dev/null || true
+        sleep 2
+        if [ -f "$RH_BIN" ]; then
+            BIN_SIZE=$(wc -c < "$RH_BIN" 2>/dev/null | tr -d ' ')
+            ok "rayhunter-daemon installed: $RH_BIN ($BIN_SIZE bytes, $BUNDLED_RH_VERSION musl static)"
+            RH_REPLACED=1
+        else
+            fail "rayhunter-daemon install failed — file not found after copy"
+        fi
+    fi
+fi
+
+# Ensure config.toml exists
+if [ ! -f "$RH_CFG" ]; then
+    info "Creating default config.toml..."
+    cat > /tmp/rh_default_cfg.toml << 'CFGEOF'
+qmdl_store_path = "/data/rayhunter/qmdl"
+port = 8080
+debug_mode = false
+enable_dummy_analyzer = false
+colorblind_mode = false
+ui_level = 1
+[log_mask]
+lte_rrc = true
+lte_nas = true
+lte_l1 = true
+lte_mac = true
+lte_rlc = true
+lte_pdcp = true
+nr_rrc = true
+wcdma = true
+gsm = true
+umts_nas = true
+ip_data = true
+f3_debug = true
+gps = true
+qmi_events = true
+enable_all = true
+CFGEOF
+    echo "cp /tmp/rh_default_cfg.toml $RH_CFG" > "$IPT_FIFO" 2>/dev/null || true
+    sleep 1
+    rm -f /tmp/rh_default_cfg.toml
+    [ -f "$RH_CFG" ] && ok "config.toml created (default)" || err "config.toml creation failed"
+else
+    ok "config.toml exists (preserved existing)"
+fi
+
+# Ensure qmdl directory exists
+mkdir -p "$RH_QMDL" 2>/dev/null || echo "mkdir $RH_QMDL" > "$IPT_FIFO"
+
+# Ensure init script exists
+if [ ! -f "$RH_INITD" ]; then
+    if [ -f "$BUNDLED_RH_INITD" ]; then
+        cp "$BUNDLED_RH_INITD" /tmp/rh_initd_tmp
+        tr -d '\r' < /tmp/rh_initd_tmp > "$RH_INITD" && chmod 755 "$RH_INITD"
+        rm -f /tmp/rh_initd_tmp
+        ok "rayhunter_daemon init script installed → $RH_INITD"
+    else
+        info "WARNING: bundled init script not found — manual boot start unavailable"
+    fi
+else
+    ok "rayhunter_daemon init script exists → $RH_INITD"
+fi
+
+# ── [6] Start rayhunter ───────────────────────────────────────────────────────
+hdr "6. Starting rayhunter"
+
+RH_PID=$(rh_pid)
+if [ -n "$RH_PID" ]; then
+    if [ "$RH_REPLACED" = "1" ]; then
+        # Old binary replaced — must restart
+        info "New binary installed — stopping old rayhunter PID=$RH_PID..."
+        kill "$RH_PID" 2>/dev/null
+        sleep 2
+        RH_PID=""
+    else
+        ok "rayhunter already running PID=$RH_PID — checking API..."
+    fi
+fi
+
+if [ -z "$RH_PID" ]; then
+    info "Starting rayhunter..."
+    if [ -f "$RH_INITD" ]; then
+        echo "$RH_INITD start" > "$IPT_FIFO" 2>/dev/null || true
+        info "  Sent: $RH_INITD start (via ipt daemon — required for CAP_SYS_ADMIN)"
+    elif [ -f "$RH_BIN" ] && [ -f "$RH_CFG" ]; then
+        info "  No init script — launching directly via ipt daemon..."
+        echo "RUST_LOG=info $RH_BIN $RH_CFG > $RH_LOG 2>&1 &" > "$IPT_FIFO" 2>/dev/null || true
+    else
+        info "  WARNING: cannot start rayhunter — binary or config missing"
+    fi
+
+    info "Waiting for rayhunter (up to 10s)..."
+    for i in $(seq 1 10); do
+        sleep 1
+        RH_PID=$(rh_pid) && { ok "rayhunter started PID=$RH_PID"; break; }
+        printf "    %ds...\r" "$i"
+    done
+    echo ""
+fi
+
+# ── [7] Verify rayhunter API ──────────────────────────────────────────────────
+hdr "7. Verifying rayhunter"
+
+# NOTE: Port 8080 on this device is also used by the Orbic management service.
+# HTTP probes to 127.0.0.1:8080 are intercepted and return Orbic error JSON.
+# Instead, we verify rayhunter by: (1) process present, (2) log confirms startup.
+
+RH_API_OK=0
+RH_TYPE="unknown"
+
+if [ -n "$RH_PID" ]; then
+    info "rayhunter process found (PID=$RH_PID) — verifying via startup log..."
+
+    # Wait up to 10s for the startup message to appear in the log
+    for i in $(seq 1 10); do
+        sleep 1
+        if [ -f "$RH_LOG" ] && grep -qE "spinning up server|orca is hunting" "$RH_LOG" 2>/dev/null; then
+            RH_API_OK=1
+            break
+        fi
+        printf "    %ds...\r" "$i"
+    done
+    echo ""
+
+    if [ "$RH_API_OK" = "1" ]; then
+        # Detect fork vs stock: fork binary has /api/stream; check log for fork indicators
+        if grep -qE "stream|diag_mode|log.mask" "$RH_LOG" 2>/dev/null; then
+            RH_TYPE="fork (extended API)"
+        else
+            RH_TYPE="stock $BUNDLED_RH_VERSION"
+        fi
+        ok "rayhunter confirmed running — startup log verified — type: $RH_TYPE"
+        [ -f "$RH_LOG" ] && tail -3 "$RH_LOG" | sed 's/^/    /'
+    else
+        info "WARNING: rayhunter process running (PID=$RH_PID) but startup not confirmed in log yet"
+        info "  Log may be redirected elsewhere or still initializing"
+        info "  Check: cat $RH_LOG"
+        info "  The Capture tab will show DIAG UNAVAILABLE until rayhunter is fully up"
+        # Show last few log lines if available
+        [ -f "$RH_LOG" ] && { info "Last log lines:"; tail -5 "$RH_LOG" | sed 's/^/    /'; }
+    fi
+else
+    info "WARNING: rayhunter process not running"
+    [ -f "$RH_LOG" ] && { info "Last log lines:"; tail -5 "$RH_LOG" | sed 's/^/    /'; }
+    info "  RayTrap Capture tab will show DIAG UNAVAILABLE"
+    info "  To start manually: echo \"$RH_INITD start\" > $IPT_FIFO"
+    info "  To install rayhunter: https://github.com/EFForg/rayhunter/releases"
+    info "    Download rayhunter-$BUNDLED_RH_VERSION-linux-armv7.zip"
+fi
+
+# ── [8] Create raytrap directory layout ───────────────────────────────────────
+hdr "8. Creating /cache/raytrap/"
 
 mkdir -p "$DEST/www/cgi-bin" "$DEST/captures"
 ok "Directories ready"
 
-# ── [6] Install web files ─────────────────────────────────────────────────────
-hdr "6. Installing web files"
+# ── [9] Install web files ─────────────────────────────────────────────────────
+hdr "9. Installing web files"
 
 cp "$SRC/start.sh" "$DEST/start.sh"
 tr -d '\r' < "$DEST/start.sh" > /tmp/cgi_strip && cp /tmp/cgi_strip "$DEST/start.sh" && rm -f /tmp/cgi_strip
@@ -188,14 +448,12 @@ cp "$SRC/www/index.html" "$DEST/www/index.html" && ok "index.html"
 
 for CGI in status firewall proxy wifi routing capture diag at usb; do
     cp "$SRC/www/cgi-bin/${CGI}.cgi" "$DEST/www/cgi-bin/${CGI}.cgi"
-    # Strip Windows CRLF — busybox sh fails to parse shebang if \r present
     tr -d '\r' < "$DEST/www/cgi-bin/${CGI}.cgi" > /tmp/cgi_strip && \
         cp /tmp/cgi_strip "$DEST/www/cgi-bin/${CGI}.cgi" && rm -f /tmp/cgi_strip
     chmod 755 "$DEST/www/cgi-bin/${CGI}.cgi"
     ok "cgi-bin/${CGI}.cgi"
 done
 
-# tinyproxy config — preserve existing user config if present
 if [ ! -f "$DEST/tinyproxy.conf" ]; then
     cp "$SRC/tinyproxy.conf" "$DEST/tinyproxy.conf" && ok "tinyproxy.conf (new)"
 else
@@ -203,16 +461,16 @@ else
 fi
 [ ! -f /cache/tinyproxy.conf ] && cp "$DEST/tinyproxy.conf" /cache/tinyproxy.conf
 
-# ── [7] Install /etc/init.d/raytrap_daemon ────────────────────────────────────
-hdr "7. Installing /etc/init.d/raytrap_daemon"
+# ── [10] Install /etc/init.d/raytrap_daemon ───────────────────────────────────
+hdr "10. Installing /etc/init.d/raytrap_daemon"
 
 cp "$SRC/raytrap_daemon" "$RAYTRAP_INITD" || { err "Cannot write $RAYTRAP_INITD — read-only fs?"; exit 1; }
 tr -d '\r' < "$RAYTRAP_INITD" > /tmp/cgi_strip && cp /tmp/cgi_strip "$RAYTRAP_INITD" && rm -f /tmp/cgi_strip
 chmod 755 "$RAYTRAP_INITD"
 ok "Installed: $RAYTRAP_INITD"
 
-# ── [8] Patch /etc/init.d/misc-daemon ────────────────────────────────────────
-hdr "8. Patching /etc/init.d/misc-daemon"
+# ── [11] Patch /etc/init.d/misc-daemon ────────────────────────────────────────
+hdr "11. Patching /etc/init.d/misc-daemon"
 
 if [ ! -f "$MISC_DAEMON" ]; then
     info "misc-daemon not found — skipping (boot persistence via init.d unavailable)"
@@ -274,68 +532,8 @@ AWKEOF
     fi
 fi
 
-# ── [9] Ensure rayhunter is running ───────────────────────────────────────────
-hdr "9. Rayhunter"
-
-# Helper: scan /proc for rayhunter-daemon process
-rh_pid() {
-    for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
-        cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
-        case "$cmd" in *rayhunter-daemon*) echo "$p"; return 0;; esac
-    done
-    return 1
-}
-
-RH_PID=$(rh_pid)
-if [ -n "$RH_PID" ]; then
-    ok "rayhunter already running PID=$RH_PID"
-else
-    info "rayhunter not running — attempting start..."
-
-    RH_BIN=""
-    [ -f /data/rayhunter/rayhunter-daemon ] && RH_BIN=/data/rayhunter/rayhunter-daemon
-
-    if [ -z "$RH_BIN" ]; then
-        # rayhunter not installed — warn only, do not fail install
-        info "WARNING: rayhunter binary not found at /data/rayhunter/rayhunter-daemon"
-        info "         Install rayhunter (EFF stock or fork) and restart it manually."
-        info "         RayTrap Capture tab will show DIAG UNAVAILABLE until rayhunter runs."
-    else
-        # rayhunter binary exists — start via init script or direct via ipt daemon
-        # rootshell cannot exec start-stop-daemon (cap restriction); use ipt FIFO (full caps)
-        RH_STARTED=0
-        if [ -f /etc/init.d/rayhunter_daemon ]; then
-            info "Starting via /etc/init.d/rayhunter_daemon (ipt daemon)..."
-            echo "/etc/init.d/rayhunter_daemon start" > "$IPT_FIFO" 2>/dev/null || true
-        else
-            # No init script — launch binary directly via ipt daemon
-            RH_CFG=/data/rayhunter/config.toml
-            if [ -f "$RH_CFG" ]; then
-                info "No init script found — launching rayhunter-daemon directly via ipt daemon..."
-                echo "RUST_LOG=info $RH_BIN $RH_CFG > /data/rayhunter/rayhunter.log 2>&1 &" > "$IPT_FIFO" 2>/dev/null || true
-            else
-                info "WARNING: rayhunter config not found at $RH_CFG"
-                info "         Cannot start rayhunter — start it manually after install."
-            fi
-        fi
-
-        # Wait up to 8s for process to appear
-        for i in $(seq 1 8); do
-            sleep 1
-            RH_PID=$(rh_pid) && { ok "rayhunter started PID=$RH_PID"; RH_STARTED=1; break; }
-        done
-
-        if [ "$RH_STARTED" = "0" ]; then
-            # Non-fatal: RayTrap still works, just Capture/DIAG tab shows unavailable
-            info "WARNING: rayhunter did not start within 8s"
-            info "         Check /data/rayhunter/rayhunter.log for errors"
-            info "         RayTrap Capture tab will show DIAG UNAVAILABLE"
-        fi
-    fi
-fi
-
-# ── [10] Launch busybox httpd via inittab once ────────────────────────────────
-hdr "10. Launching httpd (busybox, inittab once)"
+# ── [12] Launch busybox httpd via inittab once ────────────────────────────────
+hdr "12. Launching httpd (busybox, inittab once)"
 
 TAG="rt$(( ($$ % 9) + 1 ))$(date +%S 2>/dev/null | cut -c3 || echo 0)"
 
@@ -377,8 +575,8 @@ else
     grep CapEff /proc/$HPID/status 2>/dev/null | awk '{printf "  [+] CapEff: %s\n",$2}'
 fi
 
-# ── [11] Verify port 8888 ─────────────────────────────────────────────────────
-hdr "11. Verifying port 8888"
+# ── [13] Verify port 8888 ─────────────────────────────────────────────────────
+hdr "13. Verifying port 8888"
 
 sleep 1
 HEX=$(printf "%04X" 8888)
@@ -390,12 +588,12 @@ else
     fail "Port 8888 NOT listening — httpd may have failed"
 fi
 
-# ── [12] Cleanup ──────────────────────────────────────────────────────────────
-hdr "12. Cleanup"
+# ── [14] Cleanup ──────────────────────────────────────────────────────────────
+hdr "14. Cleanup"
 info "Staging at /data/tmp/raytrap — clean from PC with: adb shell rm -rf /data/tmp/raytrap"
 
-# ── [13] Final service verification ───────────────────────────────────────────
-hdr "13. Final service verification"
+# ── [15] Final service verification ───────────────────────────────────────────
+hdr "15. Final service verification"
 
 SVC_FAIL=0
 
@@ -406,31 +604,39 @@ if [ -f "$PIDFILE" ]; then
     [ -n "$HP" ] && [ -d "/proc/$HP" ] && HTTPD_OK=1
 fi
 if [ "$HTTPD_OK" = "1" ]; then
-    ok "RayTrap httpd      RUNNING (PID=$HP, port 8888)"
+    ok "RayTrap httpd      RUNNING  (PID=$HP, port 8888)"
 else
-    err "RayTrap httpd      FAILED"
+    err "RayTrap httpd      FAILED   — check busybox httpd availability"
     SVC_FAIL=1
 fi
 
 # ipt daemon
 if [ -p "$IPT_FIFO" ]; then
     IPID=$(cat "$IPT_DIR/daemon.pid" 2>/dev/null)
-    ok "iptables daemon    RUNNING (PID=$IPID, FIFO ready)"
+    ok "iptables daemon    RUNNING  (PID=$IPID, FIFO ready)"
 else
-    err "iptables daemon    FAILED (FIFO not present)"
+    err "iptables daemon    FAILED   — check $IPT_DIR/daemon.log"
     SVC_FAIL=1
 fi
 
-# rayhunter (warning only — separate install, not a RayTrap hard dependency)
-RH_OK=0
-for p in $(ls /proc/ 2>/dev/null | grep -E '^[0-9]+$'); do
-    cmd=$(cat /proc/$p/cmdline 2>/dev/null | tr '\0' ' ')
-    case "$cmd" in *rayhunter-daemon*) RH_OK=1; RH_PID=$p; break;; esac
-done
-if [ "$RH_OK" = "1" ]; then
-    ok "rayhunter          RUNNING (PID=$RH_PID)"
+# rayhunter (non-fatal — separate from RayTrap core)
+RH_FINAL_PID=$(rh_pid)
+if [ -n "$RH_FINAL_PID" ]; then
+    if [ "$RH_API_OK" = "1" ]; then
+        ok "rayhunter          RUNNING  (PID=$RH_FINAL_PID, API OK, $RH_TYPE)"
+    else
+        info "rayhunter          RUNNING  (PID=$RH_FINAL_PID, API not yet responding — may still be starting)"
+    fi
 else
-    info "rayhunter          NOT RUNNING — Capture/DIAG tab shows UNAVAILABLE (start manually)"
+    info "rayhunter          NOT RUNNING — Capture/DIAG tab unavailable"
+    info "  Status was: $RH_STATUS"
+    case "$RH_STATUS" in
+        not_found)   info "  rayhunter was not installed — bundled version install may have failed" ;;
+        glibc_crash) info "  Old glibc binary detected and replaced — start failed anyway" ;;
+        static_ok)   info "  Binary was functional but failed to start — check: cat $RH_LOG" ;;
+    esac
+    info "  Manual start: echo \"$RH_INITD start\" > $IPT_FIFO"
+    info "  Or install:   https://github.com/EFForg/rayhunter/releases (linux-armv7)"
 fi
 
 echo ""
@@ -438,14 +644,14 @@ echo ""
 if [ "$SVC_FAIL" = "1" ] || [ "$FAIL" = "1" ]; then
     echo "========================================"
     echo " INSTALL INCOMPLETE — SERVICE(S) FAILED"
-    echo " Fix errors above and re-run deploy.sh"
+    echo " Review errors above and re-run deploy.sh"
     echo "========================================"
     exit 1
 fi
 
 echo "========================================"
 echo " RAYTRAP INSTALL COMPLETE"
-echo " All services verified running"
+echo " Core services verified running"
 echo "========================================"
 echo ""
 echo " Web UI      : http://192.168.1.1:8888/"
@@ -455,6 +661,7 @@ echo " Web root    : $DEST/www/"
 echo " Init script : $RAYTRAP_INITD"
 echo " Captures    : $DEST/captures/"
 echo " ipt daemon  : $IPT_DIR/  (FIFO ready)"
+echo " rayhunter   : $RH_BIN ($BUNDLED_RH_VERSION)"
 echo ""
 echo " BOOT PERSISTENCE:"
 echo "   misc-daemon → raytrap_daemon start (after modem ONLINE)"
@@ -463,6 +670,7 @@ echo ""
 echo " MANUAL:"
 echo "   /etc/init.d/raytrap_daemon start|stop|restart|status"
 echo "   sh /cache/ipt/ipt_ctl.sh status"
+echo "   echo '$RH_INITD start' > $IPT_FIFO"
 echo ""
 echo " ACCESS VIA ADB:"
 echo "   adb forward tcp:8889 tcp:8888"
