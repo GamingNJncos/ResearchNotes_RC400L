@@ -1,15 +1,44 @@
 # RayTrap — Unified Web Control Interface
 
-RayTrap is a browser-based control UI running on the Orbic RC400L. It surfaces the iptables daemon, tcpdump, tinyproxy, wpa_supplicant, and policy routing behind a single-page interface accessible over ADB tunnel — no rootshell required after initial deploy.
+**Transparent WiFi MITM** · **Passive traffic mirroring** · **DNS hijacking** · **TLS intercept path** · **Full packet capture** · **Direct AT modem interface** · **GPS control** · **Cellular band/PCI/EARFCN locking** · **LTE DIAG stream (RRC · NAS · L1–PDCP)** · **IMSI-catcher detection** · **Concurrent AP+STA dual uplink** · **Per-client LTE/WiFi policy routing** · **USB composition switching** · **20 USB modes** · **Boot-persistent, browser-accessible, $30**
 
-Developed as part of the [RC400L research project](README.md). All capabilities described here are documented step-by-step in the main README.
+---
+
+RayTrap is a browser-based control interface for the Orbic RC400L, turning a $30 LTE hotspot into a pocket-sized network research platform. Nine tabs expose every capability of the device over an ADB tunnel — no rootshell, no terminal, no external hardware beyond a USB cable.
+
+Developed as part of the [RC400L research project](README.md). All underlying capabilities are documented step-by-step in the main README.
 
 ---
 
 <!-- screenshots-updated: 2026-03-11 -->
 <!-- AUTO-UPDATED: .github/workflows/screenshots.yml regenerates raytrap_demo.gif on every push touching www/ -->
 
-![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture](assets/raytrap_demo.gif)
+![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture · USB · AT Terminal · DIAG](assets/raytrap_demo.gif)
+
+---
+
+## What This Does
+
+A $30 device, fully unlocked, running a boot-persistent web UI with:
+
+| Capability | How |
+|---|---|
+| Transparent MITM of all WiFi clients | tinyproxy + iptables REDIRECT |
+| Passive traffic duplication to Wireshark | iptables TEE — zero client footprint |
+| Full packet capture on every interface | tcpdump with escaped capability jail |
+| Intercept and log all HTTP requests | Proxy tab — inline log tail |
+| DNS hijacking | iptables DNAT + optional local resolver |
+| TLS intercept path (TPROXY) | Kernel-level TPROXY rule with mitmproxy/sslsplit support |
+| Concurrent WiFi AP + STA (bridge repeater) | wpa_supplicant on wlan1 alongside wlan0 AP |
+| Per-client dual uplink (LTE or WiFi) | Policy routing tables 100/200 with MARK rules |
+| Direct AT command modem interface | /dev/smd7 shell with 322+ commands |
+| Cellular band, PCI, and EARFCN locking | AT^BANDLOCK / ^PCILOCK / ^EARFCNLOCK |
+| GPS start/stop/fix | AT+FGGPSSTART / FGGGPSNMEA |
+| Raw LTE protocol capture (RRC, NAS, L1–PDCP) | Rayhunter fork DIAG stream |
+| IMSI-catcher heuristics | Rayhunter fork analyzers |
+| USB composition switching (20 modes) | Sysfs gadget rewrite + DIAG serial toggle |
+
+Everything is browser-accessible over `adb forward tcp:8889 tcp:8888`. No app. No driver. No cloud.
 
 ---
 
@@ -19,24 +48,22 @@ Developed as part of the [RC400L research project](README.md). All capabilities 
 - **ADB working** — `adb devices` shows the device as authorized.
 - **Repo root** — all commands below assume you're running from the repo root.
 
-The deploy script is self-contained: it installs tinyproxy, tcpdump, libpcap, and all CGI scripts. No prior setup is needed. The Firewall, Proxy, Routing, and WiFi tabs will show their service status as 🔴 if the backing service (iptables daemon, wpa_supplicant) isn't running — those can be deployed separately via `PortableApps/01_xtables/` if needed.
-
 ---
 
 ## Deploy
 
 ```bash
-# Push the package (Windows Git Bash: set MSYS_NO_PATHCONV=1 first)
-adb push PortableApps/26_raytrap /data/tmp/raytrap
+# Push the package (Windows Git Bash)
+adb push PortableApps/26_raytrap //data/tmp/raytrap
 
 # Open a rootshell and run the installer
 adb shell
 rootshell
 sh /data/tmp/raytrap/deploy.sh
 
-# Clean up staging (non-root adb shell, not rootshell)
-exit          # back to adb shell
-rm -rf /data/tmp/raytrap
+# Clean up staging (non-root adb shell)
+exit
+adb shell rm -rf /data/tmp/raytrap
 ```
 
 The deploy script:
@@ -49,7 +76,7 @@ The deploy script:
 7. Injects a `once` inittab entry, signals PID 1, waits for port 8888
 8. Removes the `once` entry
 
-**Boot persistence**: after the first deploy, RayTrap starts automatically on every subsequent reboot — no further action needed.
+**Boot persistence**: RayTrap starts automatically on every subsequent reboot. The iptables daemon, rayhunter fork, and wpa_supplicant all survive reboots via the same mechanism.
 
 ---
 
@@ -57,7 +84,7 @@ The deploy script:
 
 ```bash
 adb forward tcp:8889 tcp:8888
-# Open in browser:  http://127.0.0.1:8889/
+# Open:  http://127.0.0.1:8889/
 ```
 
 ```
@@ -73,7 +100,7 @@ adb forward tcp:8889 tcp:8888
 └──────────────────┘                             └──────────────────────────────┘
 ```
 
-**Note**: `status.cgi` polls 7–8 services on load — allow ~9 seconds for the Dashboard to fully populate over ADB tunnel.
+`status.cgi` polls 7–8 services on load — allow ~9 seconds for the Dashboard to fully populate over ADB tunnel.
 
 ---
 
@@ -82,28 +109,28 @@ adb forward tcp:8889 tcp:8888
 ### Dashboard
 
 Live status poll every 15 seconds. Shows 🟢/🔴 indicators for:
-- iptables daemon (`/cache/ipt/cmd.fifo` + `CapEff`)
+- iptables daemon (`/cache/ipt/cmd.fifo` + `CapEff` capability check)
 - tinyproxy (PID + port 8118 listening state)
 - wpa_supplicant on `wlan1` (connection state, SSID, IP)
 - Active tcpdump capture (PID, interface, elapsed time)
 
 System panel: uptime, `/cache` and `/data` free space, kernel version.
 
-DIAG Owner panel: toggle `/dev/diag` between rayhunter and external tools (QCSuper). Includes LTE Stop/Start controls and QCMAP status badge.
+**DIAG Owner panel**: toggle `/dev/diag` between rayhunter (capture mode) and external tools (QCSuper / custom parsers). Includes LTE Stop/Start controls and live QCMAP status badge. Stopping LTE tears down the data session and terminates the carrier connection — useful before switching DIAG owners to avoid conflicts.
 
 ---
 
 ### Firewall
 
-Add and delete rules in the `ORBIC_PREROUTING` (nat) and `ORBIC_MANGLE` chains without touching any QCMAP chain. QCMAP remains fully functional and unaware of the custom chains.
+Add and delete rules in the `ORBIC_PREROUTING` (nat) and `ORBIC_MANGLE` chains without touching any QCMAP chain. QCMAP remains fully functional.
 
 Five rule presets:
 
 | Preset | Chain | Target | Use Case |
 |---|---|---|---|
-| Mirror (TEE) | mangle ORBIC_MANGLE | `TEE --gateway <IP>` | Passive Wireshark capture of all WiFi client traffic |
+| Mirror (TEE) | mangle ORBIC_MANGLE | `TEE --gateway <IP>` | Passive Wireshark feed — no ARP poisoning, no client changes |
 | Redirect Port | nat ORBIC_PREROUTING | `REDIRECT --to-ports <port>` | Transparent port hijack (e.g. port 80 → tinyproxy) |
-| Forward to Host (DNAT) | nat ORBIC_PREROUTING | `DNAT --to-destination <IP:port>` | Redirect traffic to a different host (DNS, capture server) |
+| Forward to Host (DNAT) | nat ORBIC_PREROUTING | `DNAT --to-destination <IP:port>` | Redirect traffic to a different host — DNS, capture server, honeypot |
 | Block Source | filter ORBIC_FILTER | `DROP` | Block a specific client IP or subnet |
 | Mark Traffic | mangle ORBIC_MANGLE | `MARK --set-mark <val>` | Tag flows for policy routing on the Routing tab |
 
@@ -114,16 +141,16 @@ Active rules table shows all entries in `ORBIC_*` chains with type badges and pe
 ### Proxy
 
 tinyproxy lifecycle control:
-- **Start / Stop** — launches tinyproxy via the inittab escape (full caps required for `CAP_NET_BIND_SERVICE`)
+- **Start / Stop** — launches via inittab escape (full `CAP_NET_BIND_SERVICE` required)
 - **Transparent HTTP** toggle — adds/removes the port 80 REDIRECT rule automatically
-- **Config editor** — inline edit of port, log level, allow subnet, max clients, timeout
-- **Log tail** — live last-30-lines of tinyproxy access log
+- **Config editor** — inline edit: port, log level, allow subnet, max clients, timeout
+- **Log tail** — live last-30-lines of tinyproxy access log showing every proxied request
 
 Default config: port 8118, log level `connect`, allow `192.168.1.0/24`.
 
 **Transparent proxy flow:**
 
-```diff
+```
   Client request: GET http://example.com/ HTTP/1.1
                               │
   ┌─────────────────────────────────────────────────┐
@@ -141,18 +168,22 @@ Default config: port 8118, log level `connect`, allow `192.168.1.0/24`.
                     rmnet0 (LTE) → Internet
 ```
 
+All URLs, hostnames, and request timing are visible in the log tail with no client configuration. The client has no indication their HTTP traffic is being intercepted.
+
 ---
 
 ### WiFi
 
-wpa_supplicant STA management on `wlan1` (runs alongside `wlan0` AP in concurrent mode):
+wpa_supplicant STA management on `wlan1` (concurrent with `wlan0` AP):
 
 - Connection state, current SSID, IP address, wpa_supplicant PID
-- **Add Network** — SSID + passphrase (blank for open); calls `wpa_cli add_network / set_network / enable_network / select_network`
+- **Add Network** — SSID + passphrase, per-connection band selection (Auto / 2.4 GHz / 5 GHz)
 - **Saved networks table** — per-row connect/remove buttons, current/saved status badges
 - Raw `wpa_cli status` log panel
 
-**Scanning limitation**: passive channel scan returns empty while `wlan0` AP is active (radio can't go off-channel without disrupting AP clients). Enter the SSID directly — the supplicant will associate when it hears the target beacon on the current channel.
+**AP band configuration**: separate control to switch the hosted AP between 2.4 GHz and 5 GHz (writes `wlan_conf_6174.xml`, sends SIGHUP to hostapd, effective on next AP restart).
+
+**Scanning limitation**: passive channel scan returns empty while `wlan0` AP is active (radio can't go off-channel without disrupting AP clients). Enter the target SSID directly — the supplicant will associate when it hears the target beacon on the current channel.
 
 **Dual-uplink topology:**
 
@@ -162,14 +193,16 @@ wpa_supplicant STA management on `wlan1` (runs alongside `wlan0` AP in concurren
    192.168.1.x ──►  wlan0  ──►│                              │
                     bridge0   │  MARK rules (Routing tab)    │
                               │                              │
-                              │  Table 100 (LTE)    ──────►  rmnet0  ──► Internet (LTE)
-                              │  Table 200 (WiFi)   ──────►  wlan1   ──► Upstream WiFi AP
+                              │  Table 100 (LTE)  ──────────►  rmnet0 ──► Internet (LTE)
+                              │  Table 200 (WiFi) ──────────►  wlan1  ──► Upstream WiFi AP
                               │                              │
                               │  Per-client routing:         │
                               │  client A → table 100 (LTE)  │
                               │  client B → table 200 (WiFi) │
                               └──────────────────────────────┘
 ```
+
+This topology lets you route specific clients through LTE while others exit through an upstream WiFi network — useful for A/B carrier comparison, split tunneling research, or routing a target device through a monitored LTE path while keeping your own traffic on WiFi.
 
 ---
 
@@ -179,10 +212,10 @@ Policy routing control using `ip rule` and separate routing tables:
 
 - **Table 100** — LTE uplink via `rmnet0`
 - **Table 200** — WiFi STA uplink via `wlan1`
-- **Initialize Routing Tables** button — runs one-time `ip route add` to populate both tables
-- **Per-client assignment** — route a specific WiFi client's traffic through either uplink using MARK rules
+- **Initialize Routing Tables** button — populates both tables in one click
+- **Per-client assignment** — route a specific client's traffic through either uplink using MARK rules
 
-Requires the iptables daemon to be running (for `MARK` rule injection) and wpa_supplicant associated on `wlan1` for table 200 to have a route.
+Requires iptables daemon running (for MARK injection) and wpa_supplicant associated on `wlan1` for table 200 to have a gateway route.
 
 ---
 
@@ -191,35 +224,227 @@ Requires the iptables daemon to be running (for `MARK` rule injection) and wpa_s
 tcpdump control with browser-based PCAP download:
 
 - **Interface picker**: `bridge0`, `wlan0`, `rmnet0`, `wlan1`, `any`
-- **BPF filter** text field (e.g. `port 53`, `host 192.168.1.50`, `not port 22`)
+- **BPF filter** text field — `port 53`, `host 192.168.1.50`, `not port 22`, etc.
 - **Duration**: 30s / 60s / 5m / unlimited
 - **Filename prefix**: optional label prepended to the capture filename
 - Start / Stop / Refresh buttons
-- Active capture: PID, interface, filename, elapsed time
+- Active capture: PID, interface, filename, elapsed time display
 - Saved captures: file sizes + Download link (served as `Content-Disposition: attachment`)
 
-**TEE mirror + Capture workflow** (passive interception, no client changes):
-
 ```
-Step 1: Firewall tab → Mirror (TEE) → gateway = 192.168.1.XX (this laptop)
-Step 2: Capture tab  → interface = bridge0 → Start
-
-🔵 All WiFi client packets are duplicated at mangle/PREROUTING
-🔵 Laptop receives copy on wlan0 interface
-🟢 tcpdump captures to /cache/raytrap/captures/*.pcap
-🟢 Download link appears after Stop — open in Wireshark
+Interface options:
+  bridge0  — all WiFi client traffic (most common for hotspot research)
+  wlan0    — 802.11 management frames + data before bridging
+  rmnet0   — LTE uplink only (what leaves the device toward the carrier)
+  wlan1    — upstream WiFi STA traffic (when wpa_supplicant is associated)
+  any      — all interfaces simultaneously
 ```
 
+---
+
+### USB
+
+USB composition switching and DIAG debug control:
+
+- Lists all 20 available USB compositions with their function strings (diag, serial, adb, rmnet, rndis, ecm, mbim)
+- Live read of current active composition from sysfs
+- **Set Mode** — writes to `/sys/class/android_usb/android0/` sysfs and persists to `/usrdata/mode.cfg`
+- **DIAG Debug toggle** — enables/disables the Qualcomm USB DIAG serial interface without a full mode switch
+
+Notable compositions:
+
+| Mode | Functions | Use Case |
+|---|---|---|
+| 1 (f601) | diag + serial + adb + rmnet | Standard development mode |
+| 9 (f622) | rndis + diag + serial + adb | Windows RNDIS + DIAG — QCSuper compatible |
+| 19 (9085) | mbim | Windows-native MBIM modem, no driver needed |
+| 20 (9025) | diag + serial + rmnet + adb | AT command access via serial |
+
+Switching USB composition live avoids a reboot in most cases. Enabling RNDIS in the same composition as DIAG is the key configuration for running QCSuper while maintaining ADB access.
+
+---
+
+### AT Terminal
+
+Direct interface to the modem over `/dev/smd7`. Bypasses atfwd_daemon and communicates with the baseband directly.
+
+Twelve action types:
+
+| Action | Description |
+|---|---|
+| `check` | Verify `/dev/smd7` availability and exclusivity |
+| `send` | Send an arbitrary AT command (with safety tier enforcement) |
+| `cell_intel` | Serving cell info: MCC/MNC/CI/TAC/RSRP/RSRQ/band |
+| `scan` | Network operator scan (requires modem idle) |
+| `cell_lock_read` | Read current band, PCI, and EARFCN locks |
+| `cell_lock_write` | Write band/PCI/EARFCN lock configuration |
+| `cell_unlock_all` | Remove all cellular locks |
+| `radio_read` | Read radio state: CFUN mode, PDP context |
+| `radio_write` | Set CFUN power mode (0/5/6/7), write CGDCONT |
+| `gps_start` | Start the GPS daemon |
+| `gps_stop` | Stop the GPS daemon |
+| `gps_fix` | Read current GPS fix (lat/lon/alt/accuracy) |
+
+**Safety tiers** protect against bricking actions. Commands in the BLOCKED tier (`AT+POWEROFF`, `AT+RESET`, `AT+SYSCMD`, `AT+MEIGEDL`, `AT$QCPWRDN`) are rejected entirely. Commands in the WARN tier (`PCILOCK`, `EARFCNLOCK`, `BANDLOCK`, `CFUN`, `WIFIPSK`) prompt confirmation before executing.
+
+The full command namespace includes 322 registered AT commands (`AT$QCCLAC`) across four namespaces — standard 3GPP (`AT+`), Qualcomm proprietary (`AT$`), Huawei-style caret (`AT^`), and 44 vendor-custom commands registered via atfwd_daemon. See [SideQuests/AT_Command_DeepDive.md](SideQuests/AT_Command_DeepDive.md) for the full inventory.
+
+**Locking the modem to a specific cell** (`cell_lock_write`) forces the device to camp on a single eNB/PCI/EARFCN. Useful for: verifying a suspected rogue tower is consistently serving you, measuring signal from a specific cell while eliminating neighbor handoffs, or confirming carrier band routing in a multi-carrier test environment.
+
+---
+
+### DIAG Control
+
+Rayhunter fork log mask and streaming control:
+
+- 14 toggleable DIAG log categories with single-click enable/disable
+- `enable_all` override
+- **Set Owner** — toggle `/dev/diag` between rayhunter and external tools (mirrors Dashboard panel)
+- Live rayhunter status: running, PID, port, fork stream availability, debug_mode
+
+**Log categories:**
+
+| Category | DIAG Codes | What It Captures |
+|---|---|---|
+| `lte_rrc` | 0xB0C0 | SIBs 1–13, RRC setup/release, measurement reports, handover, cell identity |
+| `lte_nas` | 0xB0E2/B0E3/B0EC/B0ED | Attach/auth, TAU, PDN connectivity, GUTI, NAS security mode |
+| `lte_l1` | 0xB17F/B11F/B180/B100/B101 | RSRP/RSRQ/SINR, neighbor scan, timing advance |
+| `lte_mac` | 0xB063/B064/B065/B08A/B08B/B08C | HARQ, scheduling, buffer status reports |
+| `lte_rlc` | 0xB086/B087/B088/B089 | PDU delivery, retransmission, sequence gaps |
+| `lte_pdcp` | 0xB097/B098/B09A/B09B/B09C | Header compression, ciphering, integrity, SRB/DRB |
+| `wcdma` | 0x412F | 3G RRC (active only when camped on WCDMA) |
+| `gsm` | 0x512F/5226 | GSM BCCH/RR/MM/GMM (active only on 2G fallback) |
+| `umts_nas` | 0x713A | 3G NAS: GMM/SM PDP context |
+| `ip_data` | 0x11EB | Data call setup/teardown, PDN bearer |
+
+**Rayhunter fork additions** (see [SideQuests/Rayhunter_Fork.md](SideQuests/Rayhunter_Fork.md)):
+- Boot mask: the fork applies the saved `[log_mask]` from `config.toml` at every startup regardless of `debug_mode`, ensuring the modem retains the selected logging configuration even when `/dev/diag` is handed off to external tools
+- Stream API: `GET /api/stream` returns a chunked octet-stream of raw DIAG frames for piping to custom parsers
+
+**Active analyzers** (rayhunter 0.8.0 + fork):
+- IMSI/IMEI identity requested outside of normal attach flow
+- Connection release with 2G redirect (forced downgrade)
+- SIB 6/7 broadcast (2G/3G priority elevation)
+- Null cipher (EEA0) negotiation
+- NAS security mode null cipher request
+- Incomplete SIB1 chain
+
+---
+
+## Attack Scenarios
+
+### Transparent WiFi MITM
+
+The simplest hotspot intercept. Connect any client to the Orbic AP. All their HTTP traffic flows through tinyproxy and is logged with hostname, path, and timing.
+
 ```
-   WiFi Client A ──►─┐
-   WiFi Client B ──►─┤                             Capture Host (Laptop)
-   WiFi Client C ──►─┤  bridge0                    192.168.1.XX
-                     ├──────────────► ORBIC_MANGLE ──► TEE ──────────────► Wireshark
-                     │                (mangle table)
-                     │
-                     └──────────────► rmnet0 ──────────────────────────► Internet
-                                      (normal routing, clients unaffected)
+1. Proxy tab → Start tinyproxy → enable Transparent HTTP
+2. Proxy tab → Log Tail shows every HTTP request in real time
+3. Capture tab → interface bridge0 → Start → download PCAP for Wireshark
 ```
+
+The client sees no certificate warning, no connection anomaly. HTTP/1.1 traffic is fully transparent. The proxy log tail updates live in the browser.
+
+---
+
+### Passive Traffic Mirror (Zero Client Footprint)
+
+TEE duplicates packets at the kernel PREROUTING hook — no ARP poisoning, no routing change, no TCP reset. The client's traffic is unaffected. A copy of every packet arrives at your capture host.
+
+```
+1. Firewall tab → Mirror (TEE) → gateway = <your Wireshark host IP>
+2. Start Wireshark on your Ethernet/WiFi interface facing the Orbic network
+3. All client traffic appears in Wireshark without touching the client
+```
+
+This is useful when you cannot or do not want to modify the target device, or when you want to capture traffic from multiple clients simultaneously.
+
+---
+
+### DNS Hijacking
+
+DNAT intercepts DNS queries before they leave the device and redirects them to a resolver you control.
+
+```bash
+# Redirect all UDP/53 to a custom resolver at 10.0.0.1:
+sh /cache/ipt/ipt_ctl.sh iptables \
+    -t nat -A ORBIC_PREROUTING \
+    -i bridge0 -p udp --dport 53 \
+    -j DNAT --to-destination 10.0.0.1:53
+```
+
+The custom resolver can be running on your laptop on the same subnet. Any DNS tool (dnsmasq, CoreDNS, Responder) can then respond to all client DNS queries. Combined with HTTP redirect, this allows full domain-based traffic steering.
+
+---
+
+### TLS Intercept Path
+
+TPROXY routes HTTPS traffic to a local TLS proxy without revealing the redirect to the client at the TCP level. The client connects to the real destination IP but the kernel hands the socket to your proxy process.
+
+```bash
+# TPROXY HTTPS → local TLS proxy on port 8443:
+sh /cache/ipt/ipt_ctl.sh iptables \
+    -t mangle -A ORBIC_MANGLE \
+    -i bridge0 -p tcp --dport 443 \
+    -j TPROXY --on-port 8443 --tproxy-mark 1
+
+sh /cache/ipt/ipt_ctl.sh ip rule add fwmark 1 lookup 100
+sh /cache/ipt/ipt_ctl.sh ip route add local 0.0.0.0/0 dev lo table 100
+```
+
+Deploy a TLS MITM proxy (mitmproxy, sslsplit, bettercap) on port 8443 via the inittab escape for full socket capabilities. Custom CA cert must be installed on the target device, or target applications that don't perform certificate validation.
+
+---
+
+### LTE Cell Intelligence
+
+Lock the modem to a specific cell to study it in isolation, or force a downgrade to characterize 2G/3G fallback behavior.
+
+```
+AT Terminal tab → cell_intel      — serving cell: MCC/MNC/eNB/CI/TAC/RSRP/RSRQ/SINR/band
+AT Terminal tab → scan            — all visible carriers and their signal levels
+AT Terminal tab → cell_lock_write → PCI + EARFCN  — pin to a specific cell
+AT Terminal tab → radio_write → CFUN=0            — power down radio
+AT Terminal tab → radio_write → CFUN=1            — bring radio back up, forced re-attach
+```
+
+Locking to a specific PCI/EARFCN and watching the DIAG stream (`lte_rrc` + `lte_nas` categories) shows the full attach and authentication exchange for that cell. If the cell requests IMSI instead of TMSI, or negotiates EEA0, rayhunter's analyzers flag it.
+
+---
+
+### Rogue Cell Site Detection
+
+Rayhunter's analyzers run continuously against the DIAG stream. The DIAG Control tab shows the active log mask and rayhunter fork status. A capture session with `lte_rrc` + `lte_nas` enabled logs:
+
+- Every identity request and whether it asked for IMSI or TMSI
+- Every NAS security mode command and the cipher negotiated
+- Every connection release with redirection target (2G forced handoff)
+- Every SIB1 with incomplete follow-up SIB chain (truncated/minimal broadcast)
+
+Historical captures are stored as QMDL files at `/data/rayhunter/qmdl/` with paired NDJSON analysis output. They can be pulled via ADB and decoded with QCSuper for deeper analysis.
+
+---
+
+### QCSuper — Protocol Layer Capture
+
+QCSuper connects directly to the modem's DIAG interface via the USB Qualcomm HS-USB Diagnostics serial port (COM15 on Windows). This captures at the protocol layer below the IP stack — radio frames, NAS messages, RRC procedures, and modem internal events.
+
+Requires: [QCSuper](https://github.com/P1sec/QCSuper) installed with Python venv and libusb. The device must be in a USB composition that exposes the DIAG interface (mode 9 or mode 1).
+
+```bash
+# From repo root (Windows Git Bash):
+cd qcsuper
+PATH="$PATH:venv/Lib/site-packages/libusb/_platform/windows/x86_64" \
+  venv/Scripts/python qcsuper.py --usb-modem COM15 --info
+
+# Live PCAP with NAS decryption:
+PATH="$PATH:..." venv/Scripts/python qcsuper.py \
+  --usb-modem COM15 --pcap-dump capture.pcap --decrypt-nas
+```
+
+Set the DIAG Owner to "External" in the Dashboard before connecting — this ensures the rayhunter fork releases `/dev/diag` after applying the saved log mask, avoiding a conflict. The boot mask feature means QCSuper inherits a pre-configured log mask without needing to set it itself.
+
+NAS capture (`lte_nas` category) requires an active SIM with network registration. The modem must be attached to a cell for NAS messages to be exchanged. RRC and L1 captures (SIBs, signal measurements, neighbor lists) work without a SIM — the modem scans and receives broadcast data regardless of SIM state.
 
 ---
 
@@ -227,74 +452,42 @@ Step 2: Capture tab  → interface = bridge0 → Start
 
 ### Path A — Capture Tab (File Download)
 
-The simplest workflow. tcpdump writes to `/cache/raytrap/captures/` and you download the `.pcap` when done.
+The simplest workflow. tcpdump writes to `/cache/raytrap/captures/` and you download when done.
 
 1. **Firewall tab** → add Mirror (TEE) rule if you want WiFi client traffic (optional — skip for rmnet0 capture)
 2. **Capture tab** → pick interface, enter BPF filter, set duration → **Start**
 3. Wait for capture to complete (or click **Stop**)
-4. Saved captures list → **Download** → opens file save dialog
+4. Saved captures list → **Download** → file save dialog
 5. Open in Wireshark on PC
-
-```diff
-+ Interface options:
-+   bridge0  — all WiFi client traffic (most common for hotspot research)
-+   wlan0    — 802.11 management frames + data before bridging
-+   rmnet0   — LTE uplink traffic (what leaves the device to the carrier)
-+   wlan1    — upstream WiFi STA traffic (if wpa_supplicant is associated)
-+   any      — all interfaces simultaneously
-```
 
 ### Path B — QCSuper Direct (DIAG Layer)
 
-QCSuper connects directly to the modem's DIAG interface on `COM15` (Qualcomm HS-USB Diagnostics). This captures at the DIAG protocol layer — deeper than tcpdump, includes radio/modem internal events.
-
-Requires: [QCSuper](https://github.com/P1sec/QCSuper) installed, Python venv, libusb.
-
-```bash
-# From repo root (Windows Git Bash):
-cd qcsuper
-PATH="$PATH:venv/Lib/site-packages/libusb/_platform/windows/x86_64" \
-  venv/Scripts/python qcsuper.py --usb-modem COM15 --info
-```
-
-The Rayhunter fork pre-applies the DIAG log mask at startup (seeds `/dev/diag` with saved `[log_mask]` from `config.toml`, then releases it in `debug_mode=true`). Use the **Capture tab** DIAG Owner panel to set owner to "External" before connecting QCSuper — this ensures `/dev/diag` is available.
-
-```
-DIAG log mask categories (set via Capture tab → Mask):
-  🟢 LOG_1X     — CDMA/EVDO (no-op on LTE-only RC400L)
-  🟢 LOG_HDR    — EVDO (no-op)
-  🟢 LOG_GSM    — GSM (no-op)
-  🟢 LOG_UMTS   — WCDMA (no-op)
-  🟢 LOG_LTE    — LTE air interface, RRC, NAS ← primary signal
-  🟢 LOG_WLAN   — 802.11 MAC/PHY
-  🟢 LOG_QCNEA  — network evaluation framework
-  ... (14 categories total — see SideQuests/Rayhunter_Fork.md)
-```
+See QCSuper section above. Captures below IP — radio frames, NAS messages, RRC procedures.
 
 ### Path C — Rayhunter Fork Stream Endpoint
 
-The rayhunter fork exposes raw DIAG frames as a chunked HTTP stream. Useful for piping into custom parsers or tools that can consume chunked octet-stream.
+The rayhunter fork exposes raw DIAG frames as a chunked HTTP stream. Pipe to a custom parser or feed to tools that accept chunked octet-stream input.
 
 ```bash
 # ADB forward rayhunter's port:
-adb forward tcp:2828 tcp:2828
+adb forward tcp:18080 tcp:8080
 
-# Stream raw DIAG bytes to stdout:
-curl -s http://127.0.0.1:2828/api/stream | hexdump -C | head -50
+# Stream raw DIAG bytes:
+curl -s http://127.0.0.1:18080/api/stream | hexdump -C | head -50
 
-# Or save to file for offline analysis:
-curl -s http://127.0.0.1:2828/api/stream > diag_capture.bin
+# Save to file for offline analysis:
+curl -s http://127.0.0.1:18080/api/stream > diag_capture.bin
 ```
 
-The stream runs indefinitely until the connection is closed. Rayhunter must be the DIAG owner (Capture tab → "Set rayhunter as owner") for the stream to contain data.
+Rayhunter must be the DIAG owner (Dashboard → "Set rayhunter as owner") for the stream to contain data.
 
 ---
 
 ## iptables Recipes
 
-All rules are injected via the ipt daemon FIFO. They survive until the device reboots or the FIFO receives a flush command. The Firewall tab in RayTrap handles the common cases — these are the raw commands for scripting or custom rules.
+All rules are injected via the ipt daemon FIFO. They survive reboots. The Firewall tab handles the common cases — these are the raw commands for scripting.
 
-**Syntax**: `sh /cache/ipt/ipt_ctl.sh iptables [args]` (or via Firewall tab form).
+**Syntax**: `sh /cache/ipt/ipt_ctl.sh iptables [args]` (or via Firewall tab).
 
 ### Mirror All WiFi Client Traffic (TEE)
 
@@ -305,9 +498,9 @@ sh /cache/ipt/ipt_ctl.sh iptables \
     -j TEE --gateway 192.168.1.50
 ```
 
-Replace `192.168.1.50` with your Wireshark host IP. The mirror copy arrives on whichever interface of the capture host faces the Orbic network — start Wireshark on that interface.
+Replace `192.168.1.50` with your Wireshark host IP.
 
-**Single client only:**
+**Single client:**
 
 ```bash
 sh /cache/ipt/ipt_ctl.sh iptables \
@@ -325,17 +518,7 @@ sh /cache/ipt/ipt_ctl.sh iptables \
     -j REDIRECT --to-ports 8118
 ```
 
-Redirects all WiFi client HTTP to tinyproxy on port 8118. Enable via **Proxy tab → Transparent HTTP toggle** to have RayTrap manage this rule automatically (adds rule on enable, removes on disable).
-
-### REDIRECT to Specific Service
-
-```bash
-# Port 777 → rayhunter web UI on 8080:
-sh /cache/ipt/ipt_ctl.sh iptables \
-    -t nat -A ORBIC_PREROUTING \
-    -i bridge0 -p tcp --dport 777 \
-    -j REDIRECT --to-ports 8080
-```
+Manage this automatically via **Proxy tab → Transparent HTTP toggle**.
 
 ### DNAT to External Host
 
@@ -347,28 +530,24 @@ sh /cache/ipt/ipt_ctl.sh iptables \
     -j DNAT --to-destination 10.0.0.1:53
 ```
 
-### TPROXY (TLS Interception Path)
-
-TPROXY requires a local TLS proxy listening on the target port with its own certificate. This rule sets up the kernel-side redirect:
+### TPROXY (TLS Interception)
 
 ```bash
-# Mark traffic first (TPROXY requires mark-based routing):
 sh /cache/ipt/ipt_ctl.sh iptables \
     -t mangle -A ORBIC_MANGLE \
     -i bridge0 -p tcp --dport 443 \
     -j TPROXY --on-port 8443 --tproxy-mark 1
 
-# Add the policy routing rule (so marked packets go to local process):
 sh /cache/ipt/ipt_ctl.sh ip rule add fwmark 1 lookup 100
 sh /cache/ipt/ipt_ctl.sh ip route add local 0.0.0.0/0 dev lo table 100
 ```
 
-Then start a TLS MITM proxy (e.g. mitmproxy, sslsplit) on port 8443 — must be launched via inittab escape for full capabilities.
+Start a TLS MITM proxy on port 8443 via the inittab escape for full socket capabilities.
 
 ### Mark Traffic for Policy Routing
 
 ```bash
-# Mark client 192.168.1.152 for wlan1 STA uplink (table 200):
+# Route client 192.168.1.152 through WiFi STA uplink (table 200):
 sh /cache/ipt/ipt_ctl.sh iptables \
     -t mangle -A ORBIC_MANGLE \
     -i bridge0 -s 192.168.1.152 \
@@ -377,18 +556,16 @@ sh /cache/ipt/ipt_ctl.sh iptables \
 sh /cache/ipt/ipt_ctl.sh ip rule add fwmark 200 lookup 200
 ```
 
-Use the **Routing tab** "Initialize Routing Tables" button first to populate tables 100 and 200.
-
 ### View and Flush Rules
 
 ```bash
 # View all ORBIC_* chain rules:
 sh /cache/ipt/ipt_ctl.sh status
 
-# Flush all ORBIC_* chains (keeps QCMAP rules):
+# Flush all ORBIC_* chains (keeps QCMAP rules intact):
 sh /cache/ipt/ipt_ctl.sh flush
 
-# Individual rule delete (by rule number):
+# Delete individual rule by number:
 sh /cache/ipt/ipt_ctl.sh iptables -t mangle -D ORBIC_MANGLE 1
 ```
 
@@ -404,17 +581,19 @@ All source in `PortableApps/26_raytrap/`:
 | `raytrap/start.sh` | Manual start script (used by raytrap_daemon) |
 | `raytrap/raytrap_daemon` | `/etc/init.d/` service script (start/stop/status) |
 | `raytrap/tinyproxy` | HTTP proxy binary (ARM, glibc 2.22) |
-| `raytrap/tcpdump` | Packet capture binary (ARM, glibc 2.22) |
+| `raytrap/tcpdump` | Packet capture binary (ARM, static) |
 | `raytrap/libpcap.so.1` | libpcap shared library |
 | `raytrap/tinyproxy.conf` | Default tinyproxy configuration |
-| `raytrap/www/index.html` | Single-page web UI (~875 lines, vanilla JS) |
+| `raytrap/www/index.html` | Single-page web UI (vanilla JS, no dependencies) |
 | `raytrap/www/cgi-bin/status.cgi` | System overview, service PIDs, DIAG owner |
 | `raytrap/www/cgi-bin/firewall.cgi` | ORBIC_* chain rule management |
-| `raytrap/www/cgi-bin/proxy.cgi` | tinyproxy lifecycle + config |
-| `raytrap/www/cgi-bin/wifi.cgi` | wpa_supplicant network management |
+| `raytrap/www/cgi-bin/proxy.cgi` | tinyproxy lifecycle + config + log tail |
+| `raytrap/www/cgi-bin/wifi.cgi` | wpa_supplicant network management + AP band |
 | `raytrap/www/cgi-bin/routing.cgi` | ip rule + policy routing tables |
 | `raytrap/www/cgi-bin/capture.cgi` | tcpdump start/stop + PCAP download |
-| `raytrap/www/cgi-bin/diag.cgi` | DIAG owner toggle, LTE control, QCMAP ensure |
+| `raytrap/www/cgi-bin/usb.cgi` | USB composition switch + DIAG debug toggle |
+| `raytrap/www/cgi-bin/at.cgi` | /dev/smd7 AT terminal, GPS, cell lock, radio |
+| `raytrap/www/cgi-bin/diag.cgi` | DIAG owner toggle, log mask, LTE control |
 
 The Rayhunter fork patch (`PortableApps/26_raytrap/rayhunter_fork/daemon/src/main.rs`) seeds the DIAG log mask at every startup — documented in [SideQuests/Rayhunter_Fork.md](SideQuests/Rayhunter_Fork.md).
 
@@ -424,24 +603,32 @@ The Rayhunter fork patch (`PortableApps/26_raytrap/rayhunter_fork/daemon/src/mai
 
 **RayTrap not responding after deploy**
 
-Check if httpd is running: `adb shell cat /proc/net/tcp6 | grep 22B8` (0x22B8 = port 8888). If absent, the inittab injection may have failed. Rerun deploy.
+Check if httpd is running: `adb shell cat /proc/net/tcp6 | grep 22B8` (0x22B8 = port 8888). If absent, the inittab injection may have failed — rerun deploy.
 
 **Dashboard loads but shows all services red**
 
-`status.cgi` takes ~6–9 seconds over ADB tunnel. Wait, then refresh. If the iptables daemon shows red, verify `ls -la /cache/ipt/cmd.fifo` exists.
+`status.cgi` takes ~6–9 seconds over ADB tunnel. Wait, then refresh. If the iptables daemon shows red, verify `ls -la /cache/ipt/cmd.fifo` exists on device.
 
 **Firewall rules not taking effect**
 
-The iptables daemon must be running (green on Dashboard). Deploy `PortableApps/01_xtables/` if it isn't — that package installs the FIFO daemon that the Firewall tab uses to inject rules.
+The iptables daemon must be running (green on Dashboard). Deploy `PortableApps/01_xtables/` separately if needed — that package installs the FIFO daemon that the Firewall tab uses.
 
 **Transparent proxy not intercepting traffic**
 
-Verify the REDIRECT rule is active (Firewall tab → active rules table). Verify tinyproxy is running (Proxy tab → PID shown). Verify client is connecting through the Orbic hotspot and not directly to another AP.
+Verify REDIRECT rule is active (Firewall tab → active rules table). Verify tinyproxy is running (Proxy tab → PID shown). Verify the client is connected to the Orbic hotspot.
 
 **WiFi tab shows wpa_supplicant not running**
 
-wpa_supplicant is deployed as part of `PortableApps/01_xtables/`. Check `ps | grep wpa_supplicant` from rootshell to verify it launched.
+wpa_supplicant is deployed as part of `PortableApps/01_xtables/`. Check `ps | grep wpa_supplicant` from rootshell.
+
+**AT Terminal shows /dev/smd7 busy**
+
+Another process has the AT channel open. On MDM9607, `/dev/smd7` is exclusive — only one fd can hold it at a time. Check `lsof /dev/smd7` or reboot if the fd is stuck.
 
 **PCAP download returns empty file**
 
-Verify tcpdump has write access to `/cache/raytrap/captures/`. Run `ls -la /cache/raytrap/captures/` from rootshell to check permissions and existing files.
+Verify tcpdump has write access to `/cache/raytrap/captures/`. Run `ls -la /cache/raytrap/captures/` from rootshell.
+
+**DIAG stream empty in QCSuper**
+
+Ensure DIAG Owner is set to "External" on the Dashboard. Verify the USB composition includes the DIAG function (mode 9 or mode 1). Check QCSuper's COM port matches the Qualcomm HS-USB Diagnostics device in Device Manager.
