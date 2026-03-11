@@ -2592,7 +2592,8 @@ async function loadUsb() {
   // Show mismatch warning if last-applied mode differs from mode.cfg
   const appliedEl = $('usb-sc-mode-applied');
   if(s.applied_mode && s.mode && s.applied_mode !== s.mode){
-    appliedEl.textContent = 'last applied: ' + s.applied_mode + ' — reboot or Apply Now to sync';
+    appliedEl.innerHTML = 'last applied: ' + s.applied_mode +
+      ' &nbsp;<button class="btn sm warn" onclick="usbSelectMode('+s.mode+');usbLiveApply()">Apply Saved (Mode '+s.mode+')</button>';
     appliedEl.style.display = '';
   } else {
     appliedEl.style.display = 'none';
