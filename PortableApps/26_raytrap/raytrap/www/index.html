@@ -1071,21 +1071,17 @@ tr:hover td{background:#071520}
     <div class="panel-body">
       <p style="color:#3a6080;font-size:11px;margin-bottom:12px">
         Apply an arbitrary function string to the live USB gadget. If a custom mode causes problems <strong>REMOVE BATTERY TO RECOVER</strong>.<br><br>
-        Valid names: <code>diag serial adb rndis ecm ecm_qc rmnet usb_mbim gps ffs ncm</code>
+        Valid names: <code>diag serial rndis ecm ecm_qc rmnet usb_mbim gps ffs ncm</code>
       </p>
       <div class="form-row">
         <label>Functions</label>
-        <input id="usb-custom-funcs" value="diag,ecm,rndis,adb" style="flex:1;font-family:monospace">
+        <input id="usb-custom-funcs" value="diag,ecm,rndis" style="flex:1;font-family:monospace">
       </div>
       <div class="form-row">
         <label>idProduct</label>
         <input id="usb-custom-pid" placeholder="f622 (optional)" style="width:120px;font-family:monospace">
         <button class="btn warn" onclick="usbCustomApply()">&#9888; Apply Custom (USB drops)</button>
         <span id="usb-custom-countdown" style="display:none;color:#ffaa00;font-size:12px;align-self:center"></span>
-      </div>
-      <div class="usb-warn" style="margin-top:8px">
-        &#9888; ADB must be in the functions string or the ADB tunnel will be severed. USB drops for ~5 s.
-        If something goes wrong: pull the battery — device reboots into <code>mode.cfg</code> (default mode 9).
       </div>
     </div>
   </div>
@@ -2743,13 +2739,12 @@ async function usbLiveApply() {
 }
 
 async function usbCustomApply(){
-  const funcs = $('usb-custom-funcs').value.trim();
+  const raw   = $('usb-custom-funcs').value.trim();
   const pid   = $('usb-custom-pid').value.trim();
-  if(!funcs){ toast('Functions string required', true); return; }
-  if(!funcs.split(',').map(f=>f.trim()).includes('adb')){
-    alert('BLOCKED: "adb" is not in the functions string.\n\nWithout ADB the tunnel will be severed and access lost.\nAdd "adb" to the functions list.');
-    return;
-  }
+  if(!raw){ toast('Functions string required', true); return; }
+  // Auto-inject adb, deduplicate
+  const parts = [...new Set([...raw.split(',').map(f=>f.trim()).filter(Boolean), 'adb'])];
+  const funcs = parts.join(',');
   const answer = prompt(
     'CONFIRM CUSTOM USB COMPOSITION\n\n' +
     'Functions: ' + funcs + '\n' +
