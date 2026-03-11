@@ -1067,6 +1067,31 @@ tr:hover td{background:#071520}
     </div>
   </div>
 
+  <!-- Custom composition -->
+  <div class="panel">
+    <div class="panel-hdr"><h3>Custom Composition</h3></div>
+    <div class="panel-body">
+      <p style="color:#3a6080;font-size:11px;margin-bottom:12px;line-height:1.6">
+        Apply an arbitrary function string to the live USB gadget. Does <strong>not</strong> persist across reboots — use a saved mode for that.
+        Valid names: <code>diag serial adb rndis ecm ecm_qc rmnet usb_mbim gps ffs ncm</code>
+      </p>
+      <div class="form-row">
+        <label>Functions</label>
+        <input id="usb-custom-funcs" value="diag,ecm,rndis,adb" style="flex:1;font-family:monospace">
+      </div>
+      <div class="form-row">
+        <label>idProduct</label>
+        <input id="usb-custom-pid" placeholder="f622 (optional)" style="width:120px;font-family:monospace">
+        <button class="btn warn" onclick="usbCustomApply()">&#9888; Apply Custom (USB drops)</button>
+        <span id="usb-custom-countdown" style="display:none;color:#ffaa00;font-size:12px;align-self:center"></span>
+      </div>
+      <div class="usb-warn" style="margin-top:8px">
+        &#9888; ADB must be in the functions string or the ADB tunnel will be severed.
+        USB drops for ~5 s on apply.
+      </div>
+    </div>
+  </div>
+
 </section>
 
 </main>
@@ -2678,6 +2703,29 @@ async function usbLiveApply() {
   const d = await api('usb.cgi', 'action=live_apply');
   if (!d.ok) { toast('Apply failed: ' + d.error, true); return; }
   usbStartCountdown('usb-apply-countdown', 10, 'USB reconnected — refresh if page is unresponsive', loadUsb);
+}
+
+async function usbCustomApply(){
+  const funcs = $('usb-custom-funcs').value.trim();
+  const pid   = $('usb-custom-pid').value.trim();
+  if(!funcs){ toast('Functions string required', true); return; }
+  if(!funcs.split(',').map(f=>f.trim()).includes('adb')){
+    alert('BLOCKED: "adb" is not in the functions string.\n\nWithout ADB the tunnel will be severed and access lost.\nAdd "adb" to the functions list.');
+    return;
+  }
+  const answer = prompt(
+    'CONFIRM CUSTOM USB COMPOSITION\n\n' +
+    'Functions: ' + funcs + '\n' +
+    (pid ? 'idProduct: ' + pid : 'idProduct: f622 (default)') + '\n\n' +
+    'USB will disconnect for ~5 seconds then reconnect.\n' +
+    'This does NOT persist across reboots.\n\n' +
+    'Type "apply" to proceed:'
+  );
+  if(!answer || answer.trim().toLowerCase() !== 'apply'){ toast('Cancelled'); return; }
+  const params = 'action=custom_apply&functions=' + encodeURIComponent(funcs) + (pid ? '&pid='+encodeURIComponent(pid) : '');
+  const d = await api('usb.cgi', params);
+  if(!d.ok){ toast('Error: ' + d.error, true); return; }
+  usbStartCountdown('usb-custom-countdown', 10, 'USB reconnected — custom composition active', loadUsb);
 }
 
 async function setUsbDiag(enable) {

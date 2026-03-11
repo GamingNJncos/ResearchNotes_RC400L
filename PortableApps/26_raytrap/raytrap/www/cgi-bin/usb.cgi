@@ -155,6 +155,45 @@ if [ "$ACTION" = "live_apply" ]; then
     exit 0
 fi
 
+# ── custom_apply ───────────────────────────────────────────────────────────────
+# Apply an arbitrary USB function composition live (does NOT persist across reboots).
+# Parameters: functions (comma-separated), pid (4-hex idProduct, optional, default f622)
+# Validated against a whitelist of registered function names.
+if [ "$ACTION" = "custom_apply" ]; then
+    FUNCS=$(param functions)
+    PID=$(param pid)
+
+    [ -z "$FUNCS" ] && { err "functions required"; exit 0; }
+
+    # Validate: each token must be a known registered function name
+    WHITELIST="diag serial adb rndis rndis_qc ecm ecm_qc rmnet usb_mbim gps ffs ncm mtp ptp mass_storage"
+    OLD_IFS="$IFS"; IFS=","
+    for fn in $FUNCS; do
+        OK=false
+        for w in $WHITELIST; do [ "$fn" = "$w" ] && { OK=true; break; }; done
+        if ! $OK; then IFS="$OLD_IFS"; err "unknown function: $fn"; exit 0; fi
+    done
+    IFS="$OLD_IFS"
+
+    [ -z "$PID" ] && PID="f622"
+    printf '%s' "$PID" | grep -qiE '^[0-9a-f]{4}$' || { err "pid must be 4 hex digits"; exit 0; }
+
+    FUNCS_J=$(printf '%s' "$FUNCS" | sed 's/"/\\"/g')
+    (sleep 3
+     echo 0 > "$USB/enable"
+     printf '%s\n' "$PID" > "$USB/idProduct"
+     echo 05C6 > "$USB/idVendor"
+     echo diag > "$USB/f_diag/clients" 2>/dev/null
+     echo smd,smd,smd > "$USB/f_serial/transports" 2>/dev/null
+     echo 1 > "$USB/f_rndis/wceis" 2>/dev/null
+     printf '%s\n' "$FUNCS" > "$USB/functions"
+     echo 1 > "$USB/enable"
+     /etc/init.d/adbd start >/dev/null 2>&1) </dev/null >/dev/null 2>&1 &
+
+    ok "{\"functions\":\"$FUNCS_J\",\"pid\":\"$PID\",\"applying\":true,\"delay_sec\":3}"
+    exit 0
+fi
+
 # ── diag_usb_set ───────────────────────────────────────────────────────────────
 # Toggle the Qualcomm DIAG interface in the live USB gadget functions.
 # enable=1 → add "diag" to current functions (host sees Qualcomm Diagnostics port)
