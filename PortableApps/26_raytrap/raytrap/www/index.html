@@ -1052,10 +1052,11 @@ tr:hover td{background:#071520}
     </div>
     <div class="panel-body">
       <p style="color:#3a6080;font-size:11px;margin-bottom:12px;line-height:1.6">
-        Selects the USB gadget personality from <code>/data/usb/boot_hsusb_composition</code>.
-        The saved mode persists across reboots via <code>/usrdata/mode.cfg</code>.
-        "Next Boot Only" writes <code>/usrdata/mode_tmp.cfg</code> (one-shot; consumed at boot).
-        "Apply Now" writes sysfs directly — USB drops for ~2 seconds.
+        Each number is the <strong>mode index</strong> passed to <code>boot_hsusb_composition</code> — the script reads <code>/usrdata/mode.cfg</code> at boot and calls <code>switch_fun &lt;mode&gt;</code> which sets the matching sysfs composition.
+        <strong>Click a row to select it.</strong>
+        "Save Persistent" writes the number to <code>mode.cfg</code> (survives all reboots).
+        "Next Boot Only" writes <code>mode_tmp.cfg</code> (one-shot, consumed at boot, then reverts to mode.cfg).
+        "Apply Now" writes sysfs directly — USB drops for ~2 s.
       </p>
       <div id="usb-mode-list"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" id="usb-apply-row">
@@ -1067,12 +1068,14 @@ tr:hover td{background:#071520}
     </div>
   </div>
 
-  <!-- Custom composition -->
+  <!-- Custom composition — live only -->
   <div class="panel">
-    <div class="panel-hdr"><h3>Custom Composition</h3></div>
+    <div class="panel-hdr">
+      <h3>Custom Composition <span style="color:#ffaa00;font-size:11px;font-weight:normal;margin-left:8px">&#9888; DOES NOT SURVIVE REBOOT</span></h3>
+    </div>
     <div class="panel-body">
       <p style="color:#3a6080;font-size:11px;margin-bottom:12px;line-height:1.6">
-        Apply an arbitrary function string to the live USB gadget. Does <strong>not</strong> persist across reboots — use a saved mode for that.
+        Apply an arbitrary function string to the live USB gadget. <strong style="color:#ffaa00">Does NOT persist across reboots</strong> — pulling the battery or rebooting restores whatever is in <code>mode.cfg</code>.
         Valid names: <code>diag serial adb rndis ecm ecm_qc rmnet usb_mbim gps ffs ncm</code>
       </p>
       <div class="form-row">
@@ -1086,9 +1089,48 @@ tr:hover td{background:#071520}
         <span id="usb-custom-countdown" style="display:none;color:#ffaa00;font-size:12px;align-self:center"></span>
       </div>
       <div class="usb-warn" style="margin-top:8px">
-        &#9888; ADB must be in the functions string or the ADB tunnel will be severed.
-        USB drops for ~5 s on apply.
+        &#9888; ADB must be in the functions string or the ADB tunnel will be severed. USB drops for ~5 s.
+        If something goes wrong: pull the battery — device reboots into <code>mode.cfg</code> (default mode 9).
       </div>
+    </div>
+  </div>
+
+  <!-- Add Persistent Mode -->
+  <div class="panel">
+    <div class="panel-hdr"><h3>Add Persistent Mode <span style="color:#ff4444;font-size:11px;font-weight:normal;margin-left:8px">&#9888; MODIFIES BOOT SCRIPT</span></h3></div>
+    <div class="panel-body">
+      <div class="usb-warn" style="margin-bottom:12px">
+        <strong>&#9888; READ BEFORE USING</strong><br>
+        This appends a new case to <code>/data/usb/boot_hsusb_composition</code> — the script that initialises USB on every boot.
+        A backup is saved to <code>.bak</code> and the script is syntax-checked before install.
+        The factory original at <code>/sbin/usb/compositions/PRJ_SLT779_9025</code> is <strong>never touched</strong> and can always be restored.<br><br>
+        <strong>Recovery if USB stops working after reboot:</strong> while USB is still working, set <code>mode.cfg</code> to a known-good mode (e.g. 9) using "Save Persistent" above. On next boot the device will use that mode regardless of what is in the boot script. If already broken: pull battery — device will boot into mode.cfg default.
+      </div>
+      <div id="usb-addmode-alert"></div>
+      <div class="form-row">
+        <label>Mode #</label>
+        <input id="usb-am-mode" value="21" style="width:60px;font-family:monospace">
+        <span class="dim" style="font-size:11px">21–29 only (1–20 are reserved by factory script)</span>
+      </div>
+      <div class="form-row">
+        <label>Label</label>
+        <input id="usb-am-label" placeholder="DIAG+ECM+RNDIS research" style="flex:1">
+      </div>
+      <div class="form-row">
+        <label>Functions</label>
+        <input id="usb-am-funcs" value="diag,ecm,rndis,adb" style="flex:1;font-family:monospace">
+      </div>
+      <div class="form-row">
+        <label>idProduct</label>
+        <input id="usb-am-pid" placeholder="f622 (optional)" style="width:120px;font-family:monospace">
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <label></label>
+        <button class="btn sm" onclick="usbPreviewMode()">Preview Case Block</button>
+        <button class="btn warn" onclick="usbAddMode()">&#9888; Add to Boot Script</button>
+        <button class="btn sm danger" onclick="usbRestoreComposition()" style="margin-left:auto">Restore Factory Script</button>
+      </div>
+      <pre id="usb-am-preview" style="display:none;margin-top:10px;background:#050e18;border:1px solid #0d2035;padding:10px;font-size:11px;overflow-x:auto;color:#6ab4d4;border-radius:3px"></pre>
     </div>
   </div>
 
@@ -2726,6 +2768,63 @@ async function usbCustomApply(){
   const d = await api('usb.cgi', params);
   if(!d.ok){ toast('Error: ' + d.error, true); return; }
   usbStartCountdown('usb-custom-countdown', 10, 'USB reconnected — custom composition active', loadUsb);
+}
+
+function usbPreviewMode(){
+  const mode  = $('usb-am-mode').value.trim();
+  const funcs = $('usb-am-funcs').value.trim();
+  const pid   = $('usb-am-pid').value.trim() || 'f622';
+  const label = $('usb-am-label').value.trim() || 'custom';
+  const pre = $('usb-am-preview');
+  pre.style.display = '';
+  pre.textContent =
+    `      \t"${mode}")                # RayTrap custom mode ${mode}: ${label}\n` +
+    `                echo 0 > /sys/class/android_usb/android$num/enable\n` +
+    `                echo ${pid} > /sys/class/android_usb/android$num/idProduct\n` +
+    `                echo 05C6 > /sys/class/android_usb/android$num/idVendor\n` +
+    `                echo diag > /sys/class/android_usb/android0/f_diag/clients\n` +
+    `                echo smd,smd,smd > /sys/class/android_usb/android0/f_serial/transports\n` +
+    `                echo 1 > /sys/class/android_usb/android0/f_rndis/wceis 2>/dev/null\n` +
+    `                echo ${funcs} > /sys/class/android_usb/android$num/functions\n` +
+    `                echo 1 > /sys/class/android_usb/android$num/enable\n` +
+    `                from_adb="y"\n` +
+    `                ;;`;
+}
+
+async function usbAddMode(){
+  const mode  = $('usb-am-mode').value.trim();
+  const funcs = $('usb-am-funcs').value.trim();
+  const pid   = $('usb-am-pid').value.trim();
+  const label = $('usb-am-label').value.trim();
+  if(!mode || !funcs){ toast('Mode number and functions required', true); return; }
+  if(!funcs.split(',').map(f=>f.trim()).includes('adb')){
+    if(!confirm('WARNING: "adb" is not in the functions string.\n\nIf you save mode.cfg to this mode and reboot, ADB will be unavailable — recovery will require physical access or pulling the battery.\n\nProceed anyway?')) return;
+  }
+  const answer = prompt(
+    'ADD PERSISTENT CUSTOM MODE\n\n' +
+    'Mode: ' + mode + '\nFunctions: ' + funcs + '\nLabel: ' + (label||'custom') + '\n\n' +
+    'This modifies /data/usb/boot_hsusb_composition.\n' +
+    'A backup is saved to .bak and sh -n validates before install.\n' +
+    'The mode will NOT take effect until you also Save Persistent (above) and reboot.\n\n' +
+    'Type "add" to proceed:'
+  );
+  if(!answer || answer.trim().toLowerCase() !== 'add'){ toast('Cancelled'); return; }
+  const params = 'action=add_mode&mode='+encodeURIComponent(mode)+'&functions='+encodeURIComponent(funcs)+
+    (pid?'&pid='+encodeURIComponent(pid):'')+(label?'&label='+encodeURIComponent(label):'');
+  const d = await api('usb.cgi', params);
+  if(!d.ok){ alert2('usb-addmode-alert', 'Failed: '+d.error, true); return; }
+  alert2('usb-addmode-alert',
+    'Mode '+d.data.mode+' added to boot script (backup: '+d.data.backup+').<br>'+
+    'Now select mode '+d.data.mode+' in the list above and click <strong>Save Persistent</strong>, then test with Custom Composition before rebooting.', false);
+  loadUsb();
+}
+
+async function usbRestoreComposition(){
+  if(!confirm('Restore factory boot script?\n\nThis removes ALL custom modes (21-29) from boot_hsusb_composition by reinstating the original symlink.\n\nThe current file will NOT be backed up — ensure mode.cfg points to a standard mode (1-20) first.\n\nProceed?')) return;
+  const d = await api('usb.cgi', 'action=restore_composition');
+  if(!d.ok){ alert2('usb-addmode-alert', 'Restore failed: '+d.error, true); return; }
+  alert2('usb-addmode-alert', 'Factory script restored — all custom modes removed.', false);
+  loadUsb();
 }
 
 async function setUsbDiag(enable) {
