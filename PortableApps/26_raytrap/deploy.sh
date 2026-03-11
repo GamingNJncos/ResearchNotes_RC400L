@@ -141,7 +141,7 @@ for f in tinyproxy tcpdump libpcap.so.1 raytrap_daemon start.sh \
           www/cgi-bin/proxy.cgi www/cgi-bin/wifi.cgi \
           www/cgi-bin/routing.cgi www/cgi-bin/capture.cgi \
           www/cgi-bin/diag.cgi www/cgi-bin/at.cgi \
-          www/cgi-bin/usb.cgi \
+          www/cgi-bin/usb.cgi www/cgi-bin/stream_proxy.cgi \
           ipt/ipt_daemon.sh ipt/ipt_ctl.sh ipt/ipt_rules.sh \
           rayhunter-daemon-bin rayhunter_daemon_init; do
     if [ ! -f "$SRC/$f" ]; then
@@ -446,7 +446,7 @@ chmod 755 "$DEST/start.sh" && ok "start.sh"
 
 cp "$SRC/www/index.html" "$DEST/www/index.html" && ok "index.html"
 
-for CGI in status firewall proxy wifi routing capture diag at usb; do
+for CGI in status firewall proxy wifi routing capture diag at usb stream_proxy; do
     cp "$SRC/www/cgi-bin/${CGI}.cgi" "$DEST/www/cgi-bin/${CGI}.cgi"
     tr -d '\r' < "$DEST/www/cgi-bin/${CGI}.cgi" > /tmp/cgi_strip && \
         cp /tmp/cgi_strip "$DEST/www/cgi-bin/${CGI}.cgi" && rm -f /tmp/cgi_strip

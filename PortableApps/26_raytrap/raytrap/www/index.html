@@ -180,6 +180,25 @@ tr:hover td{background:#071520}
 .at-delta{animation:atdelta .8s ease-out}
 @keyframes atdelta{0%{background:#1a2800}100%{background:transparent}}
 
+/* COWBELL — NAS Decoder */
+.nas-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.nas-status-wrap{display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 10px;border-radius:3px;border:1px solid #0d2035;background:#071018}
+.nas-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#333;display:inline-block}
+.nas-dot.ok{background:#00ff88;box-shadow:0 0 5px #00ff88}
+.nas-dot.warn{background:#ffaa00}
+.nas-dot.err{background:#ff4444;box-shadow:0 0 5px #ff4444}
+.nas-dot.off{background:#333}
+.nas-stat{font-size:12px;color:#2a5070}
+.nas-dir-ul{color:#ffaa00}
+.nas-dir-dl{color:#00d4ff}
+tr.nas-row-alert td{background:#200a0a}
+.nas-alert-imsi{color:#ff6a00;font-weight:bold}
+.nas-alert-enc{color:#ff4444;font-weight:bold}
+.nas-table-wrap{overflow-y:auto;max-height:380px;border:1px solid #0d2035;border-radius:3px}
+#cowbell-trigger{background:none;border:none;color:#1a3050;font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;transition:color .2s;flex-shrink:0}
+#cowbell-trigger:hover{color:#3a6080}
+.coming-soon{color:#1a3050;font-size:12px;padding:20px 0;text-align:center;letter-spacing:2px;text-transform:uppercase}
+
 /* USB / Debug tab */
 .usb-mode-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid #0d2035;border-radius:3px;background:#071018;cursor:pointer;margin-bottom:6px;transition:border-color .15s}
 .usb-mode-row:hover{border-color:#1e3a5f}
@@ -220,6 +239,7 @@ tr:hover td{background:#071520}
     <span class="dot" id="ds-wifi"><span class="ind"></span>WIFI</span>
     <span class="dot" id="ds-cap"><span class="ind"></span>CAP</span>
   </div>
+  <button id="cowbell-trigger" onclick="cowbellClick()" title="...">&#x1F404;</button>
 </div>
 
 <nav>
@@ -231,6 +251,7 @@ tr:hover td{background:#071520}
   <button data-tab="capture">Capture</button>
   <button data-tab="at">AT Terminal</button>
   <button data-tab="usb">USB / Debug</button>
+  <button data-tab="cowbell" id="nav-cowbell" style="display:none">&#x1F404; COWBELL</button>
 </nav>
 
 <main>
@@ -1119,6 +1140,72 @@ tr:hover td{background:#071520}
         <button class="btn sm danger" onclick="usbRestoreComposition()" style="margin-left:auto">Restore Factory Script</button>
       </div>
       <pre id="usb-am-preview" style="display:none;margin-top:10px;background:#050e18;border:1px solid #0d2035;padding:10px;font-size:11px;overflow-x:auto;color:#6ab4d4;border-radius:3px"></pre>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════ COWBELL ═══════════════════════ -->
+<section id="tab-cowbell" class="tab-content">
+
+  <!-- NAS Message Decoder -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4E1; NAS Message Decoder</h3>
+      <span class="dim" style="font-size:11px">LTE OTA frames via rayhunter /api/stream</span>
+    </div>
+    <div class="panel-body">
+      <div class="nas-toolbar">
+        <div class="nas-status-wrap">
+          <span class="nas-dot off" id="nas-dot"></span>
+          <span id="nas-status-text">Disconnected</span>
+        </div>
+        <button class="btn sm primary" id="nas-btn-connect" onclick="nasConnect()">Connect</button>
+        <button class="btn sm danger"  id="nas-btn-stop"    onclick="nasStop()" disabled>Stop</button>
+        <button class="btn sm"         onclick="nasClear()">Clear</button>
+        <button class="btn sm"         onclick="nasExportCsv()">Export CSV</button>
+        <span class="nas-stat" style="margin-left:auto">
+          Frames: <span id="nas-frame-count">0</span> &nbsp;|&nbsp; NAS Events: <span id="nas-event-count">0</span>
+        </span>
+      </div>
+      <div class="nas-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:80px">Time</th>
+              <th style="width:36px">Dir</th>
+              <th style="width:40px">PD</th>
+              <th>Type</th>
+              <th style="width:120px">IMSI/TMSI</th>
+              <th style="width:90px">Alert</th>
+              <th style="width:180px">Raw (8B)</th>
+            </tr>
+          </thead>
+          <tbody id="nas-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIB Inspector stub -->
+  <div class="panel">
+    <div class="panel-hdr"><h3>&#x1F4F6; SIB Inspector</h3></div>
+    <div class="panel-body"><div class="coming-soon">coming soon</div></div>
+  </div>
+
+  <!-- Misc stubs -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+    <div class="panel">
+      <div class="panel-hdr"><h3>&#x1F4CD; GPS Spoof</h3></div>
+      <div class="panel-body"><div class="coming-soon">coming soon</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><h3>&#x1F4CB; ARP Table</h3></div>
+      <div class="panel-body"><div class="coming-soon">coming soon</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><h3>&#x1F5BC; FrameBuffer</h3></div>
+      <div class="panel-body"><div class="coming-soon">coming soon</div></div>
     </div>
   </div>
 
@@ -2858,6 +2945,418 @@ function atOnTabOpen() {
   atCheck();
   // Re-enter current mode (restore poll if intel mode)
   if(atState.mode==='intel') atPollChange();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COWBELL UNLOCK
+// ═══════════════════════════════════════════════════════════════════════════════
+let cowbellClicks = 0, cowbellTimer = null;
+const COWBELL_KEY = 'cowbell_unlocked';
+
+function cowbellClick() {
+  cowbellClicks++;
+  clearTimeout(cowbellTimer);
+  cowbellTimer = setTimeout(() => { cowbellClicks = 0; }, 10000);
+  if (cowbellClicks >= 7) {
+    cowbellClicks = 0;
+    clearTimeout(cowbellTimer);
+    toast('The soothing sounds of cowbell begin to fill the air...');
+    localStorage.setItem(COWBELL_KEY, '1');
+    setTimeout(() => location.reload(), 2500);
+  }
+}
+
+// Restore unlock state on page load
+(function initCowbell() {
+  if (localStorage.getItem(COWBELL_KEY)) {
+    const btn = $('nav-cowbell');
+    if (btn) btn.style.display = '';
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIAG NAS DECODER
+// Decodes LTE NAS OTA frames from rayhunter /api/stream (via stream_proxy.cgi).
+// Protocol stack: HDLC framing → DIAG log packet → LTE NAS OTA → 3GPP TS 24.301
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class DiagNasDecoder {
+  constructor(onMessage) {
+    this.onMessage = onMessage;
+    this.inFrame = false;
+    this.frame = [];
+    this.stats = { frames: 0, nasEvents: 0 };
+  }
+
+  // Feed a Uint8Array chunk from the stream
+  feed(chunk) {
+    for (let i = 0; i < chunk.length; i++) {
+      const b = chunk[i];
+      if (b === 0x7E) {
+        // Frame delimiter — end of current frame
+        if (this.inFrame && this.frame.length >= 4) {
+          this.stats.frames++;
+          this.processFrame(new Uint8Array(this.frame));
+        }
+        this.frame = [];
+        this.inFrame = true;
+      } else if (this.inFrame) {
+        this.frame.push(b);
+      }
+    }
+  }
+
+  // HDLC byte unstuffing: 0x7D,0x5E→0x7E and 0x7D,0x5D→0x7D
+  hdlcUnescape(raw) {
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === 0x7D && i + 1 < raw.length) {
+        out.push(raw[++i] ^ 0x20);
+      } else {
+        out.push(raw[i]);
+      }
+    }
+    return new Uint8Array(out);
+  }
+
+  processFrame(raw) {
+    // Unescape HDLC stuffed bytes; strip trailing 2-byte CRC if present
+    let data = this.hdlcUnescape(raw);
+    // Strip CRC: last 2 bytes (CCITT-16). Safe to strip — we don't verify it.
+    if (data.length > 4) data = data.slice(0, data.length - 2);
+    if (data.length < 12) return;
+    this.parseDiagLog(data);
+  }
+
+  // DIAG log packet layout (cmd_code=0x10 / DIAG_LOG_F):
+  //   [0]    cmd_code         0x10
+  //   [1]    pending_msgs     (ignored)
+  //   [2-3]  log_outer_length LE
+  //   [4-5]  log_inner_length LE  (used to bound payload)
+  //   [6-7]  log_type (log_code) LE
+  //   [8-15] timestamp QWord LE   (DIAG epoch split format — see diagTicksToDate)
+  //   [16+]  log-specific payload  (log_payload[0+])
+  //
+  // LTE NAS OTA log codes (source: QCSuper log_types.py, SCAT diagcmd.py):
+  //   0xB0E0  ESM DL ciphered   0xB0E1  ESM UL ciphered
+  //   0xB0E2  ESM DL plaintext  0xB0E3  ESM UL plaintext
+  //   0xB0EA  EMM DL ciphered   0xB0EB  EMM UL ciphered
+  //   0xB0EC  EMM DL plaintext  0xB0ED  EMM UL plaintext
+  //
+  // LTE NAS OTA payload (log_payload, starting at raw data[16]):
+  //   [0]  ext_header_ver    (uint8, typically 0x01)
+  //   [1]  rrc_rel           (uint8, 3GPP RRC release)
+  //   [2]  rrc_ver_minor     (uint8)
+  //   [3]  rrc_ver_major     (uint8)
+  //   [4+] raw NAS PDU       (3GPP TS 24.301, direction from log_code)
+  //
+  // Direction: from log_code only — no direction field in payload
+  //   Even log_code (0xB0E0/E2/EA/EC) = DL (IN,  network→UE)
+  //   Odd  log_code (0xB0E1/E3/EB/ED) = UL (OUT, UE→network)
+  parseDiagLog(data) {
+    if (data[0] !== 0x10) return;
+    if (data.length < 20) return;  // need at least through NAS PDU byte 0
+    const logCode = data[6] | (data[7] << 8);
+
+    // DIAG timestamp QWord — rayhunter split format (confirmed from diag.rs Timestamp::to_datetime)
+    // Upper 48 bits (ts >> 16) tick at 800 Hz (1.25 ms each)
+    // Lower 16 bits = sub-tick at 1/40960 ms per unit
+    const lo = (data[8]  | (data[9]  << 8) | (data[10] << 16) | (data[11] << 24)) >>> 0;
+    const hi = (data[12] | (data[13] << 8) | (data[14] << 16) | (data[15] << 24)) >>> 0;
+    const ts = this.diagTicksToDate(lo, hi);
+
+    // LTE NAS OTA plain + security-protected variants
+    if ((logCode >= 0xB0E0 && logCode <= 0xB0E3) ||
+        (logCode >= 0xB0EA && logCode <= 0xB0ED)) {
+      this.parseLteNasOta(data, logCode, ts);
+    }
+  }
+
+  // DIAG timestamp: split QWord format (rayhunter diag.rs Timestamp::to_datetime)
+  // lo = lower 32 bits of uint64, hi = upper 32 bits of uint64
+  // ts_upper (bits 63:16) = hi<<16 | lo>>16  ticks at 800 Hz (1.25 ms each)
+  // ts_lower (bits 15:0)  = lo & 0xffff      sub-tick at 1/40960 ms each
+  diagTicksToDate(lo, hi) {
+    const GPS_EPOCH_MS = Date.UTC(1980, 0, 6, 0, 0, 0, 0);
+    const tsUpper = (hi * 65536 + (lo >>> 16));  // upper 48 bits, count at 800 Hz
+    const tsLower = lo & 0xffff;                 // lower 16 bits, sub-tick
+    const deltaMs = tsUpper * 1.25 + tsLower / 40960.0;
+    return new Date(GPS_EPOCH_MS + Math.floor(deltaMs));
+  }
+
+  // Parse LTE NAS OTA log payload
+  // NAS PDU at log_payload[4] = raw data[20]
+  // Direction from log_code (even=DL, odd=UL)
+  parseLteNasOta(data, logCode, ts) {
+    if (data.length < 21) return;  // at least 1 byte of NAS PDU
+
+    // Direction from log code — no direction field in payload
+    const isUL = (logCode & 1) !== 0;  // odd codes = UL/OUT
+    const dirStr = isUL ? 'UL' : 'DL';
+
+    // 4-byte sub-header at log_payload[0-3] (data[16-19])
+    // ext_header_ver=data[16], rrc_rel=data[17], rrc_minor=data[18], rrc_major=data[19]
+    // NAS PDU starts at log_payload[4] = data[20]
+    const pdu = data.slice(20);
+    if (pdu.length < 2) return;
+
+    const result = this.parseNasPdu(pdu, dirStr, ts, logCode);
+    if (result) {
+      this.stats.nasEvents++;
+      this.onMessage(result);
+    }
+  }
+
+  // 3GPP TS 24.301 NAS PDU:
+  //   [0]  byte0 = (security_header << 4) | protocol_discriminator
+  //        PD=7: EMM (EPS Mobility Management)
+  //        PD=2: ESM (EPS Session Management)
+  //        security_header=0: plain NAS, message_type at [1]
+  //        security_header>0: ciphered, body not parseable
+  //   [1]  message_type (plain NAS only)
+  //   [2+] IEs
+  parseNasPdu(pdu, dir, ts, logCode) {
+    if (!pdu || pdu.length < 2) return null;
+    const byte0 = pdu[0];
+    const secHeader = (byte0 >> 4) & 0x0F;
+    const pd = byte0 & 0x0F;
+
+    // Validate protocol discriminator — only EMM(7) and ESM(2) are LTE NAS
+    if (pd !== 7 && pd !== 2) return null;
+
+    const pdName = { 2: 'ESM', 7: 'EMM' }[pd];
+    const raw8 = Array.from(pdu.slice(0, Math.min(8, pdu.length)))
+      .map(b => b.toString(16).padStart(2, '0')).join(' ');
+
+    // Service Request special format (SHT=0xC, PD=7) — no message_type byte
+    if (secHeader === 0xC && pd === 7) {
+      return { ts, dir, pd: pdName, secHeader, msgType: 'Service Request',
+               msgCode: null, imsiTmsi: '', alert: '', raw: raw8 };
+    }
+
+    if (secHeader !== 0) {
+      // SHT=1: integrity-protected but not ciphered — inner PDU at pdu[6+] is parseable
+      if (secHeader === 1 && pdu.length > 6) {
+        const inner = pdu.slice(6);
+        const innerResult = this.parseNasPdu(inner, dir, ts, logCode);
+        if (innerResult) return innerResult;
+      }
+      // Ciphered — show type but skip field parsing
+      return { ts, dir, pd: pdName, secHeader, msgType: 'Encrypted ' + pdName,
+               msgCode: null, imsiTmsi: '', alert: '', raw: raw8 };
+    }
+
+    // EMM: message_type at byte 1; ESM: message_type at byte 2 (byte 1 = PTI)
+    const msgCode = pd === 2 ? (pdu.length >= 3 ? pdu[2] : null) : pdu[1];
+    if (msgCode === null) return null;
+
+    let msgType = 'Unknown (0x' + msgCode.toString(16).padStart(2, '0') + ')';
+    let alert = '';
+    let imsiTmsi = '';
+
+    if (pd === 7) {
+      // EMM — 3GPP TS 24.301 §9.8.1, pycrate TS24301_EMM.py verified 2026-03-11
+      switch (msgCode) {
+        case 0x41: msgType = 'Attach Request'; break;
+        case 0x42: msgType = 'Attach Accept'; break;
+        case 0x43: msgType = 'Attach Complete'; break;
+        case 0x44: msgType = 'Attach Reject'; break;
+        case 0x45: msgType = 'Detach Request'; break;
+        case 0x46: msgType = 'Detach Accept'; break;
+        case 0x48: msgType = 'TAU Request'; break;
+        case 0x49: msgType = 'TAU Accept'; break;
+        case 0x4A: msgType = 'TAU Complete'; break;
+        case 0x4B: msgType = 'TAU Reject'; break;
+        case 0x4C: msgType = 'Extended Service Request'; break;
+        case 0x4D: msgType = 'CP Service Request'; break;
+        case 0x4E: msgType = 'Service Reject'; break;
+        case 0x4F: msgType = 'Service Accept'; break;
+        case 0x50: msgType = 'GUTI Reallocation Command'; break;
+        case 0x51: msgType = 'GUTI Reallocation Complete'; break;
+        case 0x52: msgType = 'Authentication Request'; break;
+        case 0x53: msgType = 'Authentication Response'; break;
+        case 0x54: msgType = 'Authentication Reject'; break;
+        case 0x55:
+          // Identity Request — §8.2.10; byte[2] bits 2:0 = identity_type
+          if (pdu.length >= 3) {
+            const idType = pdu[2] & 0x07;
+            const idNames = { 1: 'IMSI', 2: 'IMEI', 3: 'IMEISV', 4: 'TMSI', 5: 'GUTI' };
+            const idName = idNames[idType] || ('type=' + idType);
+            msgType = 'Identity Request (' + idName + ')';
+            if (idType === 1) { alert = '⚠ IMSI REQ'; }
+            else if (idType === 2 || idType === 3) { alert = '⚠ IMEI REQ'; }
+          } else {
+            msgType = 'Identity Request';
+          }
+          break;
+        case 0x56: msgType = 'Identity Response'; break;
+        case 0x5C: msgType = 'Authentication Failure'; break;
+        case 0x5D:
+          // Security Mode Command — §8.2.20
+          // byte[2]: bits 6:4 = EEA (encryption algo), bits 2:0 = EIA (integrity algo)
+          if (pdu.length >= 3) {
+            const alg = pdu[2];
+            const eea = (alg >> 4) & 0x07;
+            const eia = alg & 0x07;
+            const eeaStr = ['EEA0/null','EEA1/SNOW','EEA2/AES','EEA3/ZUC'][eea] || 'EEA'+eea;
+            const eiaStr = ['EIA0/null','EIA1/SNOW','EIA2/AES','EIA3/ZUC'][eia] || 'EIA'+eia;
+            msgType = 'Security Mode Command (' + eeaStr + ', ' + eiaStr + ')';
+            if (eea === 0) alert = '⚠ NULL ENC';
+          } else {
+            msgType = 'Security Mode Command';
+          }
+          break;
+        case 0x5E: msgType = 'Security Mode Complete'; break;
+        case 0x5F: msgType = 'Security Mode Reject'; break;
+        case 0x60: msgType = 'EMM Status'; break;
+        case 0x61: msgType = 'EMM Information'; break;
+        case 0x62: msgType = 'DL NAS Transport'; break;
+        case 0x63: msgType = 'UL NAS Transport'; break;
+        case 0x64: msgType = 'CS Service Notification'; break;
+        case 0x68: msgType = 'DL Generic NAS Transport'; break;
+        case 0x69: msgType = 'UL Generic NAS Transport'; break;
+      }
+    } else if (pd === 2) {
+      // ESM — 3GPP TS 24.301 §9.8.2; message_type at byte 2 (byte 1 = PTI)
+      switch (msgCode) {
+        case 0xC1: msgType = 'PDN Connectivity Request'; break;
+        case 0xC2: msgType = 'PDN Connectivity Reject'; break;
+        case 0xC3: msgType = 'PDN Disconnect Request'; break;
+        case 0xC4: msgType = 'PDN Disconnect Reject'; break;
+        case 0xCA: msgType = 'ESM Information Request'; break;
+        case 0xCB: msgType = 'ESM Information Response'; break;
+        case 0xCD: msgType = 'ESM Status'; break;
+        case 0xD1: msgType = 'Activate Default EPS Bearer Ctx Request'; break;
+        case 0xD2: msgType = 'Activate Default EPS Bearer Ctx Accept'; break;
+        case 0xD3: msgType = 'Activate Default EPS Bearer Ctx Reject'; break;
+        case 0xD5: msgType = 'Activate Dedicated EPS Bearer Ctx Request'; break;
+        case 0xD6: msgType = 'Activate Dedicated EPS Bearer Ctx Accept'; break;
+        case 0xD7: msgType = 'Activate Dedicated EPS Bearer Ctx Reject'; break;
+        case 0xD9: msgType = 'Modify EPS Bearer Ctx Request'; break;
+        case 0xDA: msgType = 'Modify EPS Bearer Ctx Accept'; break;
+        case 0xDB: msgType = 'Modify EPS Bearer Ctx Reject'; break;
+        case 0xDD: msgType = 'Deactivate EPS Bearer Ctx Request'; break;
+        case 0xDE: msgType = 'Deactivate EPS Bearer Ctx Accept'; break;
+        default:   msgType = 'ESM (0x' + msgCode.toString(16) + ')';
+      }
+    }
+
+    return { ts, dir, pd: pdName, secHeader, msgType, msgCode, imsiTmsi, alert, raw: raw8 };
+  }
+}
+
+// ─── NAS Tab State + Functions ────────────────────────────────────────────────
+const nasState = {
+  connected: false, reader: null, decoder: null,
+  rows: [], maxRows: 500, frameCount: 0, nasCount: 0
+};
+
+function nasSetStatus(label, cls) {
+  const dot = $('nas-dot'), txt = $('nas-status-text');
+  if (dot) { dot.className = 'nas-dot ' + cls; }
+  if (txt) txt.textContent = label;
+}
+
+function nasUpdateStats() {
+  const fc = $('nas-frame-count'), ec = $('nas-event-count');
+  if (fc) fc.textContent = nasState.frameCount;
+  if (ec) ec.textContent = nasState.nasCount;
+}
+
+function onNasMessage(msg) {
+  nasState.nasCount++;
+  if (nasState.decoder) nasState.frameCount = nasState.decoder.stats.frames;
+  nasUpdateStats();
+  nasState.rows.push(msg);
+  if (nasState.rows.length > nasState.maxRows) nasState.rows.shift();
+  renderNasRow(msg);
+}
+
+function renderNasRow(msg) {
+  const tbody = $('nas-tbody');
+  if (!tbody) return;
+  const ts = msg.ts ? msg.ts.toLocaleTimeString() : '—';
+  const tr = document.createElement('tr');
+  if (msg.alert) tr.className = 'nas-row-alert';
+  const alertCls = msg.alert && msg.alert.includes('ENC') ? 'nas-alert-enc' : 'nas-alert-imsi';
+  tr.innerHTML =
+    '<td class="dim" style="font-size:11px;white-space:nowrap">' + escHtml(ts) + '</td>' +
+    '<td><span class="nas-dir-' + msg.dir.toLowerCase() + '">' + escHtml(msg.dir) + '</span></td>' +
+    '<td class="dim">' + escHtml(msg.pd) + '</td>' +
+    '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">' + escHtml(msg.msgType) + '</td>' +
+    '<td class="dim" style="font-family:monospace;font-size:11px">' + escHtml(msg.imsiTmsi) + '</td>' +
+    '<td class="' + (msg.alert ? alertCls : '') + '" style="font-size:12px">' + escHtml(msg.alert) + '</td>' +
+    '<td style="font-family:monospace;font-size:10px;color:#2a5070">' + escHtml(msg.raw) + '</td>';
+  const wrap = tbody.parentElement.parentElement;  // .nas-table-wrap
+  const atBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 24;
+  tbody.appendChild(tr);
+  if (atBottom) wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function nasConnect() {
+  if (nasState.connected) return;
+  nasSetStatus('Connecting…', 'warn');
+  try {
+    const resp = await fetch('/cgi-bin/stream_proxy.cgi');
+    if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+    nasState.connected = true;
+    nasSetStatus('Connected', 'ok');
+    $('nas-btn-connect').disabled = true;
+    $('nas-btn-stop').disabled = false;
+    nasState.decoder = new DiagNasDecoder(onNasMessage);
+    nasState.reader = resp.body.getReader();
+    (async () => {
+      try {
+        for (;;) {
+          const { value, done } = await nasState.reader.read();
+          if (done) break;
+          if (value) {
+            nasState.decoder.feed(value);
+            nasState.frameCount = nasState.decoder.stats.frames;
+            nasUpdateStats();
+          }
+        }
+      } catch (_) {}
+      finally { nasDisconnected(); }
+    })();
+  } catch (e) {
+    nasSetStatus('Error: ' + e.message, 'err');
+  }
+}
+
+function nasStop() {
+  if (nasState.reader) { nasState.reader.cancel().catch(() => {}); nasState.reader = null; }
+  nasDisconnected();
+}
+
+function nasDisconnected() {
+  nasState.connected = false; nasState.reader = null;
+  nasSetStatus('Disconnected', 'off');
+  const bc = $('nas-btn-connect'), bs = $('nas-btn-stop');
+  if (bc) bc.disabled = false;
+  if (bs) bs.disabled = true;
+}
+
+function nasClear() {
+  nasState.rows = []; nasState.frameCount = 0; nasState.nasCount = 0;
+  if (nasState.decoder) { nasState.decoder.stats.frames = 0; nasState.decoder.stats.nasEvents = 0; }
+  const tb = $('nas-tbody'); if (tb) tb.innerHTML = '';
+  nasUpdateStats();
+}
+
+function nasExportCsv() {
+  if (!nasState.rows.length) { toast('No data to export', true); return; }
+  const hdr = 'Time,Dir,PD,Type,IMSI/TMSI,Alert,Raw\n';
+  const rows = nasState.rows.map(r =>
+    [r.ts ? r.ts.toISOString() : '', r.dir, r.pd, r.msgType, r.imsiTmsi, r.alert, r.raw]
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+  ).join('\n');
+  const blob = new Blob([hdr + rows], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'nas_log_' + Date.now() + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 initLinks();
