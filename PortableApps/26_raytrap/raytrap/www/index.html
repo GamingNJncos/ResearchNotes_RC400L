@@ -1092,10 +1092,7 @@ tr:hover td{background:#071520}
     <div class="panel-body">
       <div class="usb-warn" style="margin-bottom:12px">
         <strong>&#9888; READ BEFORE USING</strong><br>
-        This appends a new case to <code>/data/usb/boot_hsusb_composition</code> — the script that initialises USB on every boot.
-        A backup is saved to <code>.bak</code> and the script is syntax-checked before install.
-        The factory original at <code>/sbin/usb/compositions/PRJ_SLT779_9025</code> is <strong>never touched</strong> and can always be restored.<br><br>
-        <strong>Recovery if USB stops working after reboot:</strong> while USB is still working, set <code>mode.cfg</code> to a known-good mode (e.g. 9) using "Save Persistent" above. On next boot the device will use that mode regardless of what is in the boot script. If already broken: pull battery — device will boot into mode.cfg default.
+        This appends a new case to <code>/data/usb/boot_hsusb_composition</code> — the script that initialises USB on every boot. USE AT YOUR OWN RISK.
       </div>
       <div id="usb-addmode-alert"></div>
       <div class="form-row">
