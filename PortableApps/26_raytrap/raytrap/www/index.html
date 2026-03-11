@@ -1058,6 +1058,11 @@ tr:hover td{background:#071520}
         "Next Boot Only" writes <code>mode_tmp.cfg</code> (one-shot, consumed at boot, then reverts to mode.cfg).
         "Apply Now" writes sysfs directly — USB drops for ~2 s.
       </p>
+      <div style="display:grid;grid-template-columns:36px 1fr auto;gap:10px;padding:4px 12px 6px;font-size:10px;color:#2a5070;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #0d2035;margin-bottom:6px">
+        <div style="text-align:center">Mode #<br><span style="color:#1a3a50;font-size:9px">(→ mode.cfg)</span></div>
+        <div>Composition</div>
+        <div>idProduct</div>
+      </div>
       <div id="usb-mode-list"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" id="usb-apply-row">
         <button class="btn primary" onclick="usbSaveMode(1)">&#9655; Save Persistent</button>
