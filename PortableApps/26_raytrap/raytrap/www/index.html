@@ -1254,8 +1254,16 @@ tr.nas-row-alert td{background:#200a0a}
   <!-- Misc stubs -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
     <div class="panel">
-      <div class="panel-hdr"><h3>&#x1F4CD; GPS Spoof</h3></div>
-      <div class="panel-body"><div class="coming-soon">coming soon</div></div>
+      <div class="panel-hdr"><h3>&#x1F4CD; GPS Control</h3></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn sm success" onclick="gpsCmd('gps_start')">&#9654; Start</button>
+          <button class="btn sm danger"  onclick="gpsCmd('gps_stop')">&#9646; Stop</button>
+          <button class="btn sm"         onclick="gpsCmd('gps_fix')">&#9678; Get Fix</button>
+        </div>
+        <div id="gps-resp" class="dim" style="font-size:11px;min-height:40px;white-space:pre-wrap;word-break:break-all;background:#030d18;padding:6px;border-radius:3px;border:1px solid #0d2035">Idle</div>
+        <p class="dim" style="font-size:10px;margin:6px 0 0">&#9432; AT+GPSSTART/GPSFIX/GPSEND via smd7. True position injection requires QMI LOC or SUPL MitM.</p>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-hdr">
@@ -1272,8 +1280,19 @@ tr.nas-row-alert td{background:#200a0a}
       </div>
     </div>
     <div class="panel">
-      <div class="panel-hdr"><h3>&#x1F5BC; FrameBuffer</h3></div>
-      <div class="panel-body"><div class="coming-soon">coming soon</div></div>
+      <div class="panel-hdr">
+        <h3>&#x1F5BC; FrameBuffer LCD</h3>
+        <button class="btn sm" onclick="fbInfo()">&#9432; Info</button>
+      </div>
+      <div class="panel-body">
+        <div class="dim" style="font-size:11px;margin-bottom:6px" id="fb-dims">Dims: unknown</div>
+        <input type="file" id="fb-file" accept="image/*" onchange="fbPreview(this)" style="font-size:11px;margin-bottom:6px;display:block">
+        <canvas id="fb-canvas" style="display:none;border:1px solid #0d2035;image-rendering:pixelated;max-width:100%"></canvas>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn sm primary" id="fb-upload-btn" onclick="fbUpload()" disabled>&#8679; Upload to LCD</button>
+        </div>
+        <div id="fb-status" class="dim" style="font-size:10px;margin-top:4px"></div>
+      </div>
     </div>
   </div>
 
@@ -1375,7 +1394,7 @@ const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wi
 
 function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
-  if (name === 'cowbell') { setTimeout(loadArp, 100); }
+  if (name === 'cowbell') { setTimeout(loadArp, 100); setTimeout(fbInfo, 200); }
   if (name === 'capture') { setTimeout(loadHandshakes, 100); }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   $('tab-'+name).classList.add('active');
@@ -3346,7 +3365,77 @@ class DiagNasDecoder {
   }
 }
 
-// ─── ARP Table ───────────────────────────────────────────────────────────────
+
+function gpsCmd(action) {
+  const resp = document.getElementById('gps-resp');
+  if (!resp) return;
+  resp.textContent = action + '…';
+  fetch('cgi-bin/at.cgi?action=' + action)
+    .then(r => r.json())
+    .then(j => { resp.textContent = j.ok ? (j.data || 'OK') : ('Error: ' + j.error); })
+    .catch(e => { resp.textContent = 'Fetch error: ' + e.message; });
+}
+
+// ─── FrameBuffer LCD ──────────────────────────────────────────────────────────────────────────
+const fbState = { w: 128, h: 128, ready: false };
+
+function fbInfo() {
+  fetch('cgi-bin/fb_upload.cgi?action=info')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { document.getElementById('fb-dims').textContent = 'Error: ' + j.error; return; }
+      fbState.w = j.data.width || 128;
+      fbState.h = j.data.height || 128;
+      document.getElementById('fb-dims').textContent = 'Dims: ' + fbState.w + '×' + fbState.h + ', ' + (j.data.bpp || 16) + 'bpp' + (j.data.name ? ' (' + j.data.name + ')' : '');
+    })
+    .catch(() => { document.getElementById('fb-dims').textContent = 'fb_upload.cgi unavailable'; });
+}
+
+function fbPreview(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const canvas = document.getElementById('fb-canvas');
+  const btn = document.getElementById('fb-upload-btn');
+  canvas.style.display = 'none';
+  btn.disabled = true;
+  const img = new Image();
+  img.onload = function() {
+    canvas.width = fbState.w;
+    canvas.height = fbState.h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, fbState.w, fbState.h);
+    canvas.style.display = 'block';
+    btn.disabled = false;
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function fbUpload() {
+  const canvas = document.getElementById('fb-canvas');
+  const status = document.getElementById('fb-status');
+  if (!canvas || canvas.style.display === 'none') { toast('Load an image first'); return; }
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  const rgb565 = new Uint16Array(canvas.width * canvas.height);
+  for (let i = 0; i < rgb565.length; i++) {
+    const r = pixels[i * 4]     >> 3;
+    const g = pixels[i * 4 + 1] >> 2;
+    const b = pixels[i * 4 + 2] >> 3;
+    rgb565[i] = (r << 11) | (g << 5) | b;
+  }
+  status.textContent = 'Uploading ' + (rgb565.byteLength / 1024).toFixed(1) + ' KB…';
+  fetch('cgi-bin/fb_upload.cgi', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: new Blob([rgb565.buffer], { type: 'application/octet-stream' })
+  })
+    .then(r => r.json())
+    .then(j => { status.textContent = j.ok ? '✓ Uploaded (' + (j.data.bytes_written || '?') + ' bytes)' : 'Error: ' + j.error; })
+    .catch(e => { status.textContent = 'Upload error: ' + e.message; });
+}
+
 function loadArp() {
   const tbody = $("arp-tbody");
   if (!tbody) return;
