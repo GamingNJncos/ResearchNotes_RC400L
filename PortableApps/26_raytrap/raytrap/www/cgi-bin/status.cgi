@@ -61,11 +61,14 @@ CAP_RUN=false
     CAP_RUN=true
 
 # ── rule count (ORBIC chains) ─────────────────────────────────────────────────
+# ipt_ctl.sh prints iptables errors to stdout; sanitize output to bare integer.
+_ipt_count() { sh /cache/ipt/ipt_ctl.sh iptables "$@" 2>/dev/null | grep -c '^[A-Z]' 2>/dev/null || true; }
+_to_int()    { printf '%s' "$1" | tr -dc '0-9' | head -c 6; }
 RULE_COUNT=0
 if $IPT_RUN; then
-    MG=$(sh /cache/ipt/ipt_ctl.sh iptables -t mangle -L ORBIC_MANGLE -n 2>/dev/null | grep -c '^[A-Z]' 2>/dev/null || echo 0)
-    NT=$(sh /cache/ipt/ipt_ctl.sh iptables -t nat -L ORBIC_PREROUTING -n 2>/dev/null | grep -c '^[A-Z]' 2>/dev/null || echo 0)
-    FL=$(sh /cache/ipt/ipt_ctl.sh iptables -t filter -L ORBIC_FILTER -n 2>/dev/null | grep -c '^[A-Z]' 2>/dev/null || echo 0)
+    MG=$(_to_int "$(_ipt_count -t mangle -L ORBIC_MANGLE     -n)"); MG=${MG:-0}
+    NT=$(_to_int "$(_ipt_count -t nat    -L ORBIC_PREROUTING  -n)"); NT=${NT:-0}
+    FL=$(_to_int "$(_ipt_count -t filter -L ORBIC_FILTER      -n)"); FL=${FL:-0}
     RULE_COUNT=$(( MG + NT + FL ))
 fi
 

@@ -106,7 +106,7 @@ The RC400L adds web interface binaries for the Orbic admin panel; the JMR540 add
 
 The JMR540's `atfwd_daemon` (20 KB) handles only `+CFUN` and defers everything else to `MCM_atcop_svc`.
 
-The RC400L's `atfwd_daemon` (164 KB) handles 44 AT commands directly, covering GPS, audio, cellular, hardware I/O, and security. See [atfwd_daemon Reverse Engineering](./atfwd_reversal.md) for the full breakdown.
+The RC400L's `atfwd_daemon` (164 KB) handles 44 AT commands directly, covering GPS, audio, cellular, hardware I/O, and security. See [atfwd_daemon RE](./atfwd_re.md) for the full breakdown.
 
 ---
 

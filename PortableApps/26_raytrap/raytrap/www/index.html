@@ -49,6 +49,7 @@ main{padding:16px;max-width:1100px;margin:0 auto}
 .svc-card .val.ok{color:#00ff88}
 .svc-card .val.err{color:#ff4444}
 .svc-card .val.off{color:#555}
+.svc-card .val.warn{color:#ffaa00}
 .svc-card .meta{font-size:11px;color:#3a6080;margin-top:4px}
 
 /* Tables */
@@ -77,6 +78,8 @@ tr:hover td{background:#071520}
 .btn.success{border-color:#00ff88;color:#00ff88}
 .btn.success:hover{background:#0a2018}
 .btn.sm{padding:3px 8px;font-size:12px}
+.btn.warn{border-color:#5f4400;color:#ffaa00}
+.btn.warn:hover{background:#1a1400}
 
 /* Forms */
 .form-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
@@ -147,6 +150,61 @@ tr:hover td{background:#071520}
 .dim{color:#3a6080;font-size:12px}
 .sep{border:none;border-top:1px solid #0d2035;margin:12px 0}
 #toast{position:fixed;bottom:20px;right:20px;background:#0a1628;border:1px solid #00d4ff;color:#00d4ff;padding:8px 16px;border-radius:4px;font-size:13px;display:none;z-index:100}
+
+/* AT Terminal */
+.at-banner{padding:7px 12px;border-radius:3px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:8px}
+.at-banner.ok{background:#071810;border:1px solid #1a5030;color:#00ff88}
+.at-banner.err{background:#200a0a;border:1px solid #5f1e1e;color:#ff4444}
+.at-banner.warn{background:#1a1400;border:1px solid #5f4400;color:#ffaa00}
+.at-banner.dim{background:#071018;border:1px solid #0d2035;color:#3a6080}
+.at-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.at-dot.ok{background:#00ff88;box-shadow:0 0 5px #00ff88}
+.at-dot.err{background:#ff4444;box-shadow:0 0 5px #ff4444}
+.at-dot.warn{background:#ffaa00}
+.at-dot.dim{background:#2a4060}
+.at-out{background:#040608;border:1px solid #0d2035;border-radius:3px;padding:10px;font-size:12px;max-height:320px;overflow-y:auto;line-height:1.6;color:#5a8050;margin-top:8px}
+.at-entry{border-bottom:1px solid #0a1220;padding-bottom:6px;margin-bottom:6px}
+.at-entry:last-child{border-bottom:none;margin-bottom:0}
+.at-cmd-line{color:#00d4ff;margin-bottom:2px}
+.at-resp{white-space:pre-wrap;word-break:break-all;color:#5a8050}
+.at-resp.err{color:#ff4444}
+.at-resp.timeout{color:#ffaa00}
+.at-elapsed{color:#2a4060;font-size:10px;margin-left:8px}
+.at-nb{display:inline-block;padding:1px 5px;border-radius:2px;font-size:10px;background:#091820;border:1px solid #1e3a5f;color:#3a8080;margin-left:5px;vertical-align:middle}
+.at-nb.safe{border-color:#1a4030;color:#00aa55}
+.at-nb.warn{border-color:#5f4400;color:#ffaa00}
+.at-nb.blocked{border-color:#5f1e1e;color:#ff4444}
+.at-warn-bar{background:#1a1400;border:1px solid #5f4400;color:#ffaa00;padding:6px 10px;border-radius:3px;font-size:12px;margin-top:6px;display:none}
+.at-input-row{display:flex;gap:6px;margin-top:8px}
+.at-input-row input{flex:1}
+.at-delta{animation:atdelta .8s ease-out}
+@keyframes atdelta{0%{background:#1a2800}100%{background:transparent}}
+
+/* USB / Debug tab */
+.usb-mode-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid #0d2035;border-radius:3px;background:#071018;cursor:pointer;margin-bottom:6px;transition:border-color .15s}
+.usb-mode-row:hover{border-color:#1e3a5f}
+.usb-mode-row.selected{border-color:#00d4ff;background:#091825}
+.usb-mode-num{font-size:20px;font-weight:bold;color:#1e4060;width:28px;text-align:center;line-height:1.3}
+.usb-mode-row.selected .usb-mode-num{color:#00d4ff}
+.usb-mode-info{min-width:0}
+.usb-mode-name{color:#8ab4d4;font-size:13px;margin-bottom:3px}
+.usb-mode-row.selected .usb-mode-name{color:#00d4ff}
+.usb-mode-desc{color:#2a5070;font-size:11px;line-height:1.5}
+.usb-mode-funcs{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.usb-fn{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;border:1px solid #1e3048;color:#3a6080}
+.usb-fn.diag{border-color:#3a5020;color:#6a9040}
+.usb-fn.rndis,.usb-fn.ecm,.usb-fn.ecm_qc,.usb-fn.usb_mbim{border-color:#2a3a5a;color:#4a7ab0}
+.usb-fn.adb{border-color:#3a2a5a;color:#7a50a0}
+.usb-fn.serial{border-color:#3a3a1a;color:#8a7a30}
+.usb-fn.rmnet{border-color:#2a4a3a;color:#3a8060}
+.usb-fn.gps{border-color:#3a2020;color:#906040}
+.usb-mode-badges{display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.usb-cur-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;background:#0a2030;color:#00d4ff;border:1px solid #1e4060;white-space:nowrap}
+.usb-pid{font-size:10px;color:#2a4060;white-space:nowrap}
+.usb-diag-banner{padding:10px 14px;border-radius:3px;font-size:12px;display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.usb-diag-banner.active{background:#071810;border:1px solid #1a5030;color:#00ff88}
+.usb-diag-banner.inactive{background:#1a1400;border:1px solid #5f4400;color:#ffaa00}
+.usb-warn{background:#1a0e00;border:1px solid #5f3a00;color:#cc8830;padding:7px 12px;border-radius:3px;font-size:11px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -171,6 +229,8 @@ tr:hover td{background:#071520}
   <button data-tab="wifi">WiFi</button>
   <button data-tab="routing">Routing</button>
   <button data-tab="capture">Capture</button>
+  <button data-tab="at">AT Terminal</button>
+  <button data-tab="usb">USB / Debug</button>
 </nav>
 
 <main>
@@ -389,8 +449,9 @@ tr:hover td{background:#071520}
   <div id="wifi-alert"></div>
   <div class="svc-grid">
     <div class="svc-card"><div class="name">wlan1 State</div><div class="val off" id="wf-state">—</div><div class="meta" id="wf-ssid"></div></div>
-    <div class="svc-card"><div class="name">IP Address</div><div class="val" id="wf-ip">—</div><div class="meta">wlan1</div></div>
-    <div class="svc-card"><div class="name">wpa_supplicant</div><div class="val off" id="wf-wpa">—</div><div class="meta" id="wf-wpa-pid"></div></div>
+    <div class="svc-card"><div class="name">IP Address</div><div class="val" id="wf-ip">—</div><div class="meta" id="wf-freq"></div></div>
+    <div class="svc-card"><div class="name">AP Band</div><div class="val" id="wf-ap-band">—</div><div class="meta" id="wf-ap-ch"></div><div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm" id="wf-ap-band-24" onclick="setApBand('2.4')">2.4 GHz</button><button class="btn sm" id="wf-ap-band-5" onclick="setApBand('5')">5 GHz</button></div></div>
+    <div class="svc-card"><div class="name">wpa_supplicant</div><div class="val off" id="wf-wpa">—</div><div class="meta" id="wf-wpa-pid"></div><div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm" id="wf-wpa-start" onclick="wpaAction('start_wpa')">&#9654; Start</button><button class="btn sm danger" id="wf-wpa-stop" onclick="wpaAction('stop_wpa')">&#9646;&#9646; Stop</button></div></div>
   </div>
 
   <div class="panel">
@@ -398,10 +459,18 @@ tr:hover td{background:#071520}
     <div class="panel-body">
       <div class="form-row"><label>SSID</label><input id="wn-ssid" placeholder="Network name"></div>
       <div class="form-row"><label>Password</label><input id="wn-psk" type="password" placeholder="WPA2 passphrase (blank for open)"></div>
+      <div class="form-row">
+        <label>Band</label>
+        <select id="wn-band">
+          <option value="auto">Auto (no restriction)</option>
+          <option value="2.4">2.4 GHz only</option>
+          <option value="5">5 GHz only</option>
+        </select>
+      </div>
       <div class="form-row"><label></label>
         <button class="btn primary" onclick="wifiAddNetwork()">Add &amp; Connect</button>
       </div>
-      <p class="form-help">Note: wlan1 scanning is disabled while wlan0 AP is active. Enter SSID directly if known.</p>
+      <p class="form-help">Note: wlan1 scanning is disabled while wlan0 AP is active. Enter SSID directly if known. Band restriction sets wpa_supplicant freq_list for this connection.</p>
     </div>
   </div>
 
@@ -413,6 +482,28 @@ tr:hover td{background:#071520}
         <tbody id="wf-networks"></tbody>
       </table>
       <div id="wf-empty" class="dim" style="padding:14px;display:none">No saved networks.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>wlan1 IP Configuration</h3></div>
+    <div class="panel-body">
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+        <button class="btn sm" id="wf-mode-dhcp" onclick="wlanSetDhcp()">DHCP</button>
+        <button class="btn sm" id="wf-mode-static" onclick="wlanShowStatic()">Static IP</button>
+        <button class="btn sm danger" id="wf-mode-release" onclick="wlanReleaseIp()">Release</button>
+        <span class="dim" id="wf-ip-status" style="font-size:11px;margin-left:6px"></span>
+      </div>
+      <div id="wf-static-fields" style="display:none">
+        <div class="form-row"><label>IP / CIDR</label><input id="wf-static-ip" placeholder="192.168.1.100/24"></div>
+        <div class="form-row"><label>Gateway</label><input id="wf-static-gw" placeholder="192.168.1.1"></div>
+        <div class="form-row"><label></label><button class="btn primary" onclick="wlanApplyStatic()">Apply Static</button></div>
+      </div>
+      <p class="form-help">DHCP uses dhcpcd on wlan1. Static assigns address directly — gateway route added at metric 200 (LTE stays primary at metric 0).</p>
+      <div id="wf-routing-hint" style="display:none;margin-top:10px;padding:10px 12px;background:#071825;border:1px solid #0d4060;border-radius:4px;font-size:12px">
+        &#9432; wlan1 has an IP. To route specific AP clients through wlan1 instead of LTE:
+        <button class="btn sm" style="margin-left:8px" onclick="switchTab('routing')">&#9654; Open Routing Tab</button>
+      </div>
     </div>
   </div>
 
@@ -736,6 +827,246 @@ tr:hover td{background:#071520}
 
 </section>
 
+<!-- ═══════════════════════ AT TERMINAL ═══════════════════════ -->
+<section id="tab-at" class="tab-content">
+
+  <!-- Connectivity banner -->
+  <div id="at-banner" class="at-banner dim">
+    <span class="at-dot dim" id="at-dot"></span>
+    <span id="at-banner-txt">Checking /dev/smd7…</span>
+    <button class="btn sm" style="margin-left:auto" onclick="atCheck()">Recheck</button>
+  </div>
+
+  <!-- Mode selector -->
+  <div class="rule-type-btns" id="at-mode-btns">
+    <button class="active" onclick="atSetMode('intel',this)">Cell Intel</button>
+    <button onclick="atSetMode('scan',this)">Env Scan</button>
+    <button onclick="atSetMode('lock',this)">Cell Lock</button>
+    <button onclick="atSetMode('radio',this)">Radio/Bearer</button>
+    <button onclick="atSetMode('gps',this)">GPS</button>
+    <button onclick="atSetMode('term',this)">Free Terminal</button>
+  </div>
+
+  <!-- ── Cell Intel ── -->
+  <div id="at-panel-intel" class="rule-form active">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <span class="dim">Poll:</span>
+      <select id="at-poll-int" onchange="atPollChange()">
+        <option value="0">Manual</option>
+        <option value="1">1 s</option>
+        <option value="5" selected>5 s</option>
+        <option value="10">10 s</option>
+      </select>
+      <button class="btn sm" onclick="atIntelFetch()">&#8635; Refresh</button>
+      <span id="at-intel-age" class="dim"></span>
+    </div>
+    <div class="svc-grid" id="at-intel-cards">
+      <div class="svc-card"><div class="name">RAT</div><div class="val off" id="ai-rat">—</div></div>
+      <div class="svc-card"><div class="name">RSRP (dBm)</div><div class="val off" id="ai-rsrp">—</div><div class="meta" id="ai-rsrp-m"></div></div>
+      <div class="svc-card"><div class="name">RSRQ (dB)</div><div class="val off" id="ai-rsrq">—</div></div>
+      <div class="svc-card"><div class="name">SINR</div><div class="val off" id="ai-sinr">—</div></div>
+      <div class="svc-card"><div class="name">Band / EARFCN</div><div class="val off" id="ai-band">—</div></div>
+      <div class="svc-card"><div class="name">Cell ID</div><div class="val off" id="ai-cellid">—</div></div>
+      <div class="svc-card"><div class="name">MCC-MNC</div><div class="val off" id="ai-mccmnc">—</div></div>
+      <div class="svc-card"><div class="name">Operator</div><div class="val off" id="ai-oper">—</div></div>
+      <div class="svc-card"><div class="name">Reg State</div><div class="val off" id="ai-reg">—</div><div class="meta" id="ai-reg-m"></div></div>
+    </div>
+    <div style="margin-top:6px">
+      <button class="btn sm" onclick="atToggle('at-intel-raw',this)" style="margin-bottom:6px">&#9660; Raw responses</button>
+      <div class="at-out" id="at-intel-raw" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ── Env Scan ── -->
+  <div id="at-panel-scan" class="rule-form">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+      <button class="btn primary" id="at-scan-btn" onclick="atRunScan('pciscan')">&#9654; PCISCAN</button>
+      <button class="btn" id="at-getsib-btn" onclick="atRunScan('getsib')">&#9654; GETSIB</button>
+      <span id="at-scan-status" class="dim"></span>
+    </div>
+    <div class="dim" style="font-size:11px;margin-bottom:10px">
+      PCISCAN: requires LTE registered + no active data bearer (stop LTE first via Radio/Bearer, wait ~5s, scan, then restart).<br>
+      GETSIB: requires active LTE serving cell (must be registered).
+    </div>
+    <div id="at-scan-results"></div>
+  </div>
+
+  <!-- ── Cell Lock ── -->
+  <div id="at-panel-lock" class="rule-form">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn sm" onclick="atLockRead()">&#8635; Read State</button>
+      <button class="btn sm danger" onclick="atUnlockAll()">&#8593; Unlock All</button>
+      <span id="at-lock-status" class="dim"></span>
+    </div>
+    <div class="svc-grid" id="at-lock-cards">
+      <div class="svc-card"><div class="name">PCI Lock</div><div class="val off" id="al-pci">—</div><div class="meta" id="al-pci-m"></div></div>
+      <div class="svc-card"><div class="name">EARFCN Lock</div><div class="val off" id="al-earfcn">—</div></div>
+      <div class="svc-card"><div class="name">SYSCONFIG</div><div class="val off" id="al-syscfg">—</div><div class="meta" id="al-syscfg-m"></div></div>
+      <div class="svc-card"><div class="name">Band Pref</div><div class="val off" id="al-band">—</div></div>
+    </div>
+    <hr class="sep">
+    <div style="margin-bottom:8px"><span class="dim">Write lock command:</span></div>
+    <div class="form-row">
+      <label>Command</label>
+      <input id="al-cmd" placeholder="AT^PCILOCK=300,1600" style="flex:1">
+      <button class="btn warn" onclick="atLockWrite()">Send</button>
+    </div>
+    <div id="al-warn-bar" class="at-warn-bar">&#9888; Write command — sending in <span id="al-countdown">1</span>s… <button class="btn sm" onclick="atLockWriteCancel()">Cancel</button></div>
+    <div class="at-out" id="at-lock-out" style="margin-top:6px;display:none"></div>
+  </div>
+
+  <!-- ── Radio/Bearer ── -->
+  <div id="at-panel-radio" class="rule-form">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn sm" onclick="atRadioRead()">&#8635; Read State</button>
+      <span id="at-radio-status" class="dim"></span>
+    </div>
+    <div class="svc-grid" id="at-radio-cards">
+      <div class="svc-card"><div class="name">CFUN Level</div><div class="val off" id="ar-cfun">—</div><div class="meta" id="ar-cfun-m"></div></div>
+      <div class="svc-card"><div class="name">GPRS Attach</div><div class="val off" id="ar-cgatt">—</div></div>
+      <div class="svc-card"><div class="name">Reg (CREG)</div><div class="val off" id="ar-creg">—</div></div>
+    </div>
+    <!-- CFUN write — CFUN=1/4 via diag.cgi, others via at.cgi -->
+    <hr class="sep">
+    <div style="margin-bottom:8px"><span class="dim">Radio control:</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn success" onclick="atRadioCfun(1)">&#9654; LTE On (CFUN=1)</button>
+      <button class="btn danger" onclick="atRadioCfun(4)">&#9646; Airplane (CFUN=4)</button>
+      <button class="btn" onclick="atRadioCfun(0)">&#9633; Full Off (CFUN=0)</button>
+    </div>
+    <!-- APN table -->
+    <div id="at-apn-wrap" style="display:none">
+      <div class="panel-hdr" style="margin-bottom:6px"><h3>APN Profiles (CGDCONT)</h3></div>
+      <table><thead><tr><th>CID</th><th>Type</th><th>APN</th><th>IP</th></tr></thead><tbody id="ar-apn-rows"></tbody></table>
+    </div>
+  </div>
+
+  <!-- ── GPS ── -->
+  <div id="at-panel-gps" class="rule-form">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn success" onclick="atGps('start')">&#9654; Start GPS</button>
+      <button class="btn danger" onclick="atGps('stop')">&#9646; Stop GPS</button>
+      <button class="btn" onclick="atGps('fix')">&#9672; Get Fix</button>
+      <span id="at-gps-status" class="dim"></span>
+    </div>
+    <div class="at-out" id="at-gps-out" style="display:none"></div>
+  </div>
+
+  <!-- ── Free Terminal ── -->
+  <div id="at-panel-term" class="rule-form">
+    <div style="margin-bottom:8px">
+      <button class="btn sm" onclick="atToggle('at-ns-ref',this)" style="margin-bottom:6px">&#9660; AT namespace reference</button>
+      <div id="at-ns-ref" style="display:none;font-size:11px;color:#5a8090;padding:6px 0;line-height:2">
+        <span style="color:#3a7090">Cell:</span> AT^SCELLINFO &nbsp;AT$QCSQ &nbsp;AT*CNTI=0 &nbsp;AT+CREG? &nbsp;AT+COPS?<br>
+        <span style="color:#3a7090">Lock:</span> AT^PCILOCK? &nbsp;AT^EARFCNLOCK? &nbsp;AT^SYSCONFIG? &nbsp;AT$QCBANDPREF?<br>
+        <span style="color:#3a7090">Radio:</span> AT+CFUN? &nbsp;AT+CGATT? &nbsp;AT+CGDCONT? &nbsp;AT+CREG=2<br>
+        <span style="color:#3a7090">GPS:</span> AT+GPSSTART &nbsp;AT+GPSEND &nbsp;AT+GPSFIX<br>
+        <span style="color:#3a7090">Scan:</span> AT+PCISCAN &nbsp;AT+GETSIB<br>
+        <span style="color:#3a7090">Info:</span> ATI &nbsp;AT+CGMR &nbsp;AT+CGSN &nbsp;AT+CIMI<br>
+        <span style="color:#ff4444">Danger:</span> AT+POWEROFF &nbsp;AT^RESET &nbsp;AT$QCPWRDN (force confirm required)
+      </div>
+    </div>
+    <div class="at-input-row">
+      <input id="at-term-cmd" placeholder="AT+CFUN?" onkeydown="atTermKey(event)">
+      <button class="btn primary" onclick="atTermSend()">Send</button>
+      <button class="btn sm" onclick="atTermExport()">&#8615; Export</button>
+    </div>
+    <div id="at-term-warn" class="at-warn-bar"></div>
+    <div class="at-out" id="at-term-out"><span style="color:#2a4060;font-size:11px">— output appears here —</span></div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════ USB / DEBUG ═══════════════════════ -->
+<section id="tab-usb" class="tab-content">
+
+  <div id="usb-alert"></div>
+
+  <!-- Live status -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>USB Status</h3>
+      <button class="btn sm" onclick="loadUsb()">&#8635; Refresh</button>
+    </div>
+    <div class="panel-body">
+      <div class="svc-grid">
+        <div class="svc-card">
+          <div class="name">Saved Mode</div>
+          <div class="val" id="usb-sc-mode">—</div>
+          <div class="meta" id="usb-sc-mode-meta"></div>
+        </div>
+        <div class="svc-card">
+          <div class="name">Live Functions</div>
+          <div class="val" style="font-size:12px" id="usb-sc-funcs">—</div>
+          <div class="meta" id="usb-sc-pid"></div>
+        </div>
+        <div class="svc-card">
+          <div class="name">DIAG over USB</div>
+          <div class="val" id="usb-sc-diag">—</div>
+          <div class="meta">live sysfs</div>
+        </div>
+      </div>
+      <div id="usb-sc-tmp" style="display:none" class="at-banner warn" style="margin-top:0">
+        <span class="at-dot warn"></span>
+        <span>One-shot mode queued for next boot: <strong id="usb-sc-tmp-val"></strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Qualcomm DIAG over USB toggle -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#9652; Qualcomm DIAG over USB</h3>
+      <span class="dim" style="font-size:11px" id="usb-diag-spin" style="display:none"></span>
+    </div>
+    <div class="panel-body">
+      <p style="color:#3a6080;font-size:12px;margin-bottom:10px;line-height:1.6">
+        The Qualcomm DIAG interface exposes <code>/dev/diag</code> as a USB serial port to the host.
+        When active, tools such as <strong>QCSuper</strong>, QXDM, and QPST can connect via USB cable.
+        This toggle adds or removes <code>diag</code> from the live USB gadget functions
+        without changing the composition mode. Effective immediately — USB briefly reconnects.
+      </p>
+      <div id="usb-diag-banner" class="usb-diag-banner inactive">
+        <span id="usb-diag-dot" class="at-dot warn"></span>
+        <span id="usb-diag-txt">DIAG: loading…</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label class="toggle"><input type="checkbox" id="usb-diag-chk" onchange="setUsbDiag(this.checked)"><span class="toggle-slider"></span></label>
+        <span class="dim" style="font-size:12px">Expose DIAG port to USB host</span>
+        <span id="usb-diag-countdown" style="display:none;color:#ffaa00;font-size:12px"></span>
+      </div>
+      <div class="usb-warn" style="margin-top:10px">
+        &#9888; Applying this toggle briefly disconnects USB (RNDIS + ADB). The browser tab may hang
+        during the drop — this is normal. Refresh after ~10 seconds if the page stops responding.
+        Only applies to the <em>live</em> state; the saved composition mode is unchanged.
+      </div>
+    </div>
+  </div>
+
+  <!-- Composition mode selector -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>USB Composition Mode</h3>
+    </div>
+    <div class="panel-body">
+      <p style="color:#3a6080;font-size:11px;margin-bottom:12px;line-height:1.6">
+        Selects the USB gadget personality from <code>/data/usb/boot_hsusb_composition</code>.
+        The saved mode persists across reboots via <code>/usrdata/mode.cfg</code>.
+        "Next Boot Only" writes <code>/usrdata/mode_tmp.cfg</code> (one-shot; consumed at boot).
+        "Apply Now" writes sysfs directly — USB drops for ~2 seconds.
+      </p>
+      <div id="usb-mode-list"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" id="usb-apply-row">
+        <button class="btn primary" onclick="usbSaveMode(1)">&#9655; Save Persistent</button>
+        <button class="btn" onclick="usbSaveMode(0)">&#9201; Save (Next Boot Only)</button>
+        <button class="btn warn" id="usb-apply-now-btn" onclick="usbLiveApply()">&#9888; Apply Now (USB drops)</button>
+        <span id="usb-apply-countdown" style="display:none;color:#ffaa00;font-size:12px;align-self:center"></span>
+      </div>
+    </div>
+  </div>
+
+</section>
+
 </main>
 
 <div id="toast"></div>
@@ -769,11 +1100,19 @@ async function api(cgi, params, method, body, timeoutMs){
     const opts = { method: method||'GET', signal: ac.signal };
     if(body){ opts.body = body; opts.headers = {'Content-Type':'application/x-www-form-urlencoded'}; }
     const r = await fetch(url, opts);
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    if(!r.ok) throw new Error('HTTP '+r.status+' ('+url+')');
     return await r.json();
   } catch(e) {
     console.error(cgi, e);
-    return { ok: false, error: String(e) };
+    let msg;
+    if(e.name === 'AbortError'){
+      msg = 'Request timed out after '+(Math.round((timeoutMs||30000)/1000))+'s — device may be unresponsive';
+    } else if(e instanceof TypeError && e.message.toLowerCase().includes('fetch')){
+      msg = 'Cannot reach device — check ADB forward: adb forward tcp:8889 tcp:8888';
+    } else {
+      msg = String(e);
+    }
+    return { ok: false, error: msg };
   } finally {
     clearTimeout(tid);
   }
@@ -790,7 +1129,7 @@ function setDot(id, state){
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
-const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wifi:loadWifi, routing:loadRouting, capture:loadCapture };
+const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wifi:loadWifi, routing:loadRouting, capture:loadCapture, at:atOnTabOpen, usb:loadUsb };
 
 function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
@@ -973,18 +1312,31 @@ async function loadProxyLog(){
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 
+let _wpaRunning = false;
+
 async function loadWifi(){
   const d = await api('wifi.cgi','action=status');
   if(!d.ok){ alert2('wifi-alert','Failed: '+d.error,true); return; }
   const s = d.data;
+  _wpaRunning = !!s.wpa_running;
   $('wf-state').textContent = s.wpa_state||'UNKNOWN';
   $('wf-state').className = 'val '+(s.wpa_state==='COMPLETED'?'ok':(s.wpa_state?'warn':'off'));
   $('wf-ssid').textContent = s.ssid||'';
   $('wf-ip').textContent = s.ip_address||'—';
+  $('wf-freq').textContent = s.freq ? s.freq+'MHz'+(s.sta_band?' ('+s.sta_band+'GHz)':'') : 'wlan1';
   $('wf-wpa').textContent = s.wpa_running?'RUNNING':'STOPPED';
   $('wf-wpa').className = 'val '+(s.wpa_running?'ok':'err');
   $('wf-wpa-pid').textContent = s.wpa_pid?'PID '+s.wpa_pid:'';
+  $('wf-wpa-start').className = 'btn sm' + (s.wpa_running ? '' : ' success');
+  $('wf-wpa-stop').className  = 'btn sm danger' + (s.wpa_running ? '' : ' hidden-btn');
+  $('wf-wpa-stop').style.display = s.wpa_running ? '' : 'none';
+  $('wf-wpa-start').style.display = s.wpa_running ? 'none' : '';
+  $('wf-ap-band').textContent = s.ap_band ? s.ap_band+' GHz' : '—';
+  $('wf-ap-ch').textContent = s.ap_channel!=null ? 'ch '+s.ap_channel : '';
+  $('wf-ap-band-24').className = 'btn sm'+(s.ap_band==='2.4'?' primary':'');
+  $('wf-ap-band-5').className  = 'btn sm'+(s.ap_band==='5'?' primary':'');
   $('wf-raw').textContent = s.raw||'';
+  _updateIpModeUi(s);
 
   const nets = s.networks||[];
   const tbody = $('wf-networks');
@@ -1002,11 +1354,35 @@ async function loadWifi(){
     </tr>`).join('');
 }
 
+async function wpaAction(act){
+  if(act==='stop_wpa' && !confirm('Stop wpa_supplicant? This will disconnect wlan1.')) return;
+  const d = await api('wifi.cgi',null,'POST',encode({action:act}));
+  if(d.ok){ toast(act==='start_wpa'?'wpa_supplicant started':'wpa_supplicant stopped'); setTimeout(loadWifi,1500); }
+  else { toast('Error: '+d.error,true); }
+}
+
 async function wifiAddNetwork(){
   const ssid=$('wn-ssid').value.trim(), psk=$('wn-psk').value;
+  const band = $('wn-band').value;
   if(!ssid){ toast('SSID required',true); return; }
-  const d = await api('wifi.cgi',null,'POST',encode({action:'add_network',ssid,psk}));
+  if(!_wpaRunning){
+    if(!confirm('wpa_supplicant is not running. Start it now to add this network?')) return;
+    const sd = await api('wifi.cgi',null,'POST',encode({action:'start_wpa'}));
+    if(!sd.ok){ toast('Failed to start wpa_supplicant: '+sd.error,true); return; }
+    toast('wpa_supplicant started');
+    await new Promise(r=>setTimeout(r,1200));
+    _wpaRunning = true;
+  }
+  const d = await api('wifi.cgi',null,'POST',encode({action:'add_network',ssid,psk,band}));
   if(d.ok){ toast('Network added — connecting...'); $('wn-ssid').value=''; $('wn-psk').value=''; setTimeout(loadWifi,2000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function setApBand(band){
+  if(!confirm('Switch AP to '+band+'GHz? Connected AP clients may disconnect briefly.')) return;
+  toast('Switching AP to '+band+'GHz...');
+  const d = await api('wifi.cgi',null,'POST',encode({action:'set_ap_band',band}));
+  if(d.ok){ toast('AP switched to '+band+'GHz'); setTimeout(loadWifi,2000); }
   else { toast('Error: '+d.error,true); }
 }
 
@@ -1019,6 +1395,47 @@ async function wifiConnect(id){
 async function wifiRemove(id){
   const d = await api('wifi.cgi',null,'POST',encode({action:'remove',id}));
   if(d.ok){ toast('Network removed'); loadWifi(); }
+  else { toast('Error: '+d.error,true); }
+}
+
+function _updateIpModeUi(s){
+  const mode = s.ip_mode||'none';
+  $('wf-mode-dhcp').className   = 'btn sm'+(mode==='dhcp'?' primary':'');
+  $('wf-mode-static').className = 'btn sm'+(mode==='static'?' primary':'');
+  $('wf-static-fields').style.display = mode==='static' ? '' : 'none';
+  if(mode==='static' && s.static_ip){ $('wf-static-ip').value=s.static_ip; $('wf-static-gw').value=s.static_gw||''; }
+  const cur = s.ip_address ? 'IP: '+s.ip_address : '';
+  const dhcpLbl = s.dhcp_running ? ' [dhcpcd active]' : '';
+  $('wf-ip-status').textContent = cur+dhcpLbl || (mode==='none'?'Not configured':'');
+  $('wf-routing-hint').style.display = s.ip_address ? '' : 'none';
+}
+
+async function wlanSetDhcp(){
+  if(!_wpaRunning){ toast('Start wpa_supplicant first',true); return; }
+  toast('Starting dhcpcd on wlan1...');
+  const d = await api('wifi.cgi',null,'POST',encode({action:'set_ip_dhcp'}));
+  if(d.ok){ toast('DHCP active — IP: '+(d.data.ip_address||'waiting...')); setTimeout(loadWifi,2000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+function wlanShowStatic(){
+  $('wf-static-fields').style.display='';
+  $('wf-mode-static').className='btn sm primary';
+  $('wf-mode-dhcp').className='btn sm';
+}
+
+async function wlanApplyStatic(){
+  const ip=$('wf-static-ip').value.trim(), gw=$('wf-static-gw').value.trim();
+  if(!ip||!gw){ toast('IP and gateway required',true); return; }
+  const d = await api('wifi.cgi',null,'POST',encode({action:'set_ip_static',ip,gw}));
+  if(d.ok){ toast('Static IP applied: '+d.data.ip_address); setTimeout(loadWifi,1000); }
+  else { toast('Error: '+d.error,true); }
+}
+
+async function wlanReleaseIp(){
+  if(!confirm('Release wlan1 IP and stop dhcpcd?')) return;
+  const d = await api('wifi.cgi',null,'POST',encode({action:'release_ip'}));
+  if(d.ok){ toast('wlan1 IP released'); setTimeout(loadWifi,1000); }
   else { toast('Error: '+d.error,true); }
 }
 
@@ -1464,6 +1881,824 @@ function initLinks(){
   $('lnk-port-orbic').value = op;
   $('lnk-port-rh').value    = rp;
   updateLinks();
+}
+
+// ═══════════════════════ AT TERMINAL ═══════════════════════════════════════
+
+const atState = {
+  smd7Ok: false,
+  mode: 'intel',
+  pollTimer: null,
+  pollInFlight: false,
+  termHistory: [],
+  termHistIdx: -1,
+  lockWarnTimer: null,
+  lockWarnCancel: false,
+  prevIntel: {},
+  reconnectTimer: null,
+  reconnectDelay: 2000,
+};
+
+// CME error lookup
+const CME = {
+  0:'phone failure',3:'operation not allowed',4:'operation not supported',
+  10:'SIM not inserted',11:'SIM PIN required',12:'SIM PUK required',
+  13:'SIM failure',16:'incorrect password',17:'SIM PIN2 required',
+  18:'SIM PUK2 required',20:'memory full',21:'invalid index',
+  26:'dial string too long',27:'invalid characters in dial string',
+  30:'no network service',31:'network timeout',32:'network not allowed',
+  50:'incorrect parameters',100:'unknown',
+};
+
+function atApi(params) {
+  return fetch('cgi-bin/at.cgi', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body: Object.keys(params).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(params[k])).join('&'),
+  }).then(r=>r.json()).catch(()=>null);
+}
+
+// ── banner ────────────────────────────────────────────────────────────────────
+function atBanner(cls, txt) {
+  const b = $('at-banner');
+  b.className = 'at-banner '+cls;
+  const dot = $('at-dot');
+  dot.className = 'at-dot '+cls;
+  $('at-banner-txt').textContent = txt;
+}
+
+async function atCheck() {
+  atBanner('dim','Checking /dev/smd7…');
+  // Disable all send controls while checking
+  atState.smd7Ok = false;
+  const d = await atApi({action:'check'});
+  if(!d) {
+    atBanner('err','Device unreachable — check network');
+    atScheduleReconnect();
+    return;
+  }
+  if(!d.ok) { atBanner('err','CGI error: '+d.error); return; }
+  const r = d.data;
+  atState.reconnectDelay = 2000;
+  if(atState.reconnectTimer){ clearTimeout(atState.reconnectTimer); atState.reconnectTimer=null; }
+
+  switch(r.code) {
+    case 'ok':
+      atState.smd7Ok = true;
+      atBanner('ok','/dev/smd7 OK — latency '+r.latency_ms+'ms'+(r.subsecond_sleep?'':' (integer sleep)'));
+      break;
+    case 'device_missing':
+      atBanner('err','/dev/smd7 not found — modem driver not loaded');
+      break;
+    case 'permission_denied':
+      atBanner('err','Permission denied on /dev/smd7 (uid='+r.uid+')');
+      break;
+    case 'device_busy':
+      if(r.held_by) atBanner('warn','/dev/smd7 busy — held by '+r.held_by.comm+' (pid '+r.held_by.pid+')');
+      else atBanner('warn','/dev/smd7 busy — holder unknown');
+      break;
+    case 'modem_unresponsive':
+      atBanner('warn','/dev/smd7 open OK but modem not responding');
+      break;
+    default:
+      atBanner('warn','Unknown status: '+r.code);
+  }
+}
+
+function atScheduleReconnect() {
+  if(atState.reconnectTimer) return;
+  atState.reconnectTimer = setTimeout(()=>{
+    atState.reconnectTimer = null;
+    atState.reconnectDelay = Math.min(atState.reconnectDelay * 2, 30000);
+    atCheck();
+  }, atState.reconnectDelay);
+}
+
+// ── mode switch ───────────────────────────────────────────────────────────────
+function atSetMode(mode, btn) {
+  // Clear poll timer on every mode switch
+  if(atState.pollTimer){ clearInterval(atState.pollTimer); atState.pollTimer=null; }
+
+  atState.mode = mode;
+  document.querySelectorAll('#at-mode-btns button').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+
+  ['intel','scan','lock','radio','gps','term'].forEach(m=>{
+    const el = $('at-panel-'+m);
+    if(el) el.style.display = (m===mode)?'block':'none';
+    if(el) el.classList.toggle('active', m===mode);
+  });
+
+  // Auto-actions on mode entry
+  if(mode==='intel') { atIntelFetch(); atPollChange(); }
+  if(mode==='lock')  { atLockRead(); }
+  if(mode==='radio') { atRadioRead(); }
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+// Returns true when an AT response is a plain ERROR (not a prefixed response line)
+function isErr(r){ return /ERROR/.test(r) && !r.match(/[+*^$]\w/); }
+
+// ── Cell Intel ────────────────────────────────────────────────────────────────
+async function atIntelFetch() {
+  if(atState.pollInFlight) return;
+  if(!atState.smd7Ok) return;
+  atState.pollInFlight = true;
+  $('at-intel-age').textContent = 'fetching…';
+  const d = await atApi({action:'cell_intel'});
+  atState.pollInFlight = false;
+  if(!d || !d.ok) { $('at-intel-age').textContent = 'fetch failed — CGI error'; return; }
+
+  const now = new Date().toLocaleTimeString();
+  $('at-intel-age').textContent = 'updated '+now;
+
+  const raw = d.data;
+  // Build raw display
+  let rawHtml = '';
+  for(const [cmd, val] of Object.entries(raw)) {
+    rawHtml += '<div class="at-entry"><div class="at-cmd-line">'+escHtml(cmd)+'</div><div class="at-resp">'+escHtml(val)+'</div></div>';
+  }
+  $('at-intel-raw').innerHTML = rawHtml;
+
+  // Parse each response
+  const prev = atState.prevIntel;
+
+  function setCard(id, val, meta, cls) {
+    const el = $('ai-'+id);
+    if(!el) return;
+    const changed = prev['ai-'+id] !== val;
+    prev['ai-'+id] = val;
+    el.textContent = val || '—';
+    el.className = 'val '+(cls||'');
+    if(meta !== undefined && $('ai-'+id+'-m')) $('ai-'+id+'-m').textContent = meta||'';
+    if(changed && val) { el.classList.remove('at-delta'); void el.offsetWidth; el.classList.add('at-delta'); }
+  }
+
+  // AT*CNTI=0 → RAT
+  const cntiRaw = raw['AT*CNTI=0']||'';
+  const cntiM = cntiRaw.match(/\*CNTI:\s*\d+,(\S+)/);
+  setCard('rat', cntiM?cntiM[1]: isErr(cntiRaw)?'ERROR':'—', '', cntiM?'ok': isErr(cntiRaw)?'err':'off');
+
+  // AT$QCSQ → RSSI,SINR,RSRP_delta,RSRP,RSRQ
+  const qcsqRaw = raw['AT$QCSQ']||'';
+  const qcsqM = qcsqRaw.match(/\$QCSQ:\s*([+-]?\d+),([+-]?\d+),([+-]?\d+),([+-]?\d+),([+-]?\d+)/);
+  if(qcsqM) {
+    const rsrp = parseInt(qcsqM[4]);
+    const rsrq = parseInt(qcsqM[5]);
+    const sinr = parseInt(qcsqM[2]);
+    const rsrpCls = rsrp >= -90?'ok': rsrp >= -105?'warn':'err';
+    setCard('rsrp', rsrp+'', '', rsrpCls);
+    setCard('rsrq', rsrq+'', '');
+    setCard('sinr', sinr+'', '');
+  } else {
+    const e = isErr(qcsqRaw)?'err':'off', v = isErr(qcsqRaw)?'ERROR':'—';
+    setCard('rsrp',v,'',e); setCard('rsrq',v,'',e); setCard('sinr',v,'',e);
+  }
+
+  // AT^SCELLINFO → mcc,mnc,cellid,lac,band,earfcn,rscp
+  const sciRaw = raw['AT^SCELLINFO']||'';
+  const sciM = sciRaw.match(/\^SCELLINFO:\s*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),([+-]?\d+)/);
+  if(sciM) {
+    setCard('band', 'B'+sciM[5]+' / '+sciM[6], '');
+    setCard('cellid', sciM[3], 'LAC '+sciM[4]);
+    setCard('mccmnc', sciM[1]+'-'+sciM[2], '');
+  } else {
+    const e2 = isErr(sciRaw)?'err':'off', v2 = isErr(sciRaw)?'ERROR':'—';
+    setCard('band',v2,'',e2); setCard('cellid',v2,'',e2); setCard('mccmnc',v2,'',e2);
+  }
+
+  // AT+COPS? → operator name
+  const copsRaw = raw['AT+COPS?']||'';
+  const copsM = copsRaw.match(/\+COPS:\s*\d+(?:,\d+,"([^"]*?)",\d+)?/);
+  setCard('oper', copsM&&copsM[1]?copsM[1]: isErr(copsRaw)?'ERROR':'—', '',
+          isErr(copsRaw)?'err':'off');
+
+  // AT+CREG? → reg state
+  const cregRaw = raw['AT+CREG?']||'';
+  const cregFull = cregRaw.match(/\+CREG:\s*(\d+),(\d+),"([^"]*)","([^"]*)"/);
+  const cregBasic = cregRaw.match(/\+CREG:\s*\d+,(\d+)/);
+  const cregStat = cregFull?parseInt(cregFull[2]): cregBasic?parseInt(cregBasic[1]):-1;
+  const cregLabels = {1:'Registered (home)',2:'Searching',3:'Denied',4:'Unknown',5:'Roaming'};
+  const cregLabel = cregStat>=0?(cregLabels[cregStat]||('Stat '+cregStat)): isErr(cregRaw)?'ERROR':'—';
+  const cregCls = (cregStat===1||cregStat===5)?'ok': cregStat===0?'off': (cregStat<0&&isErr(cregRaw))?'err':'off';
+  setCard('reg', cregLabel, '', cregCls);
+}
+
+function atPollChange() {
+  if(atState.pollTimer){ clearInterval(atState.pollTimer); atState.pollTimer=null; }
+  const v = parseInt($('at-poll-int').value||'0');
+  if(v>0) {
+    atState.pollTimer = setInterval(()=>atIntelFetch(), v*1000);
+  }
+}
+
+// ── Env Scan ──────────────────────────────────────────────────────────────────
+const AT_SCAN_HINTS = {
+  pciscan: 'Modem returned ERROR. PCISCAN requires LTE registered with no active data bearer. Stop LTE (Radio/Bearer → Airplane), wait ~5s for bearer to drop, run scan, then restart LTE.',
+  getsib:  'Modem returned ERROR. GETSIB requires an active LTE serving cell — modem must be registered on the network.',
+};
+
+async function atRunScan(type) {
+  if(!atState.smd7Ok) { atScanErr('smd7 not ready — check banner above'); return; }
+  $('at-scan-status').textContent = 'scanning… (up to 12s)';
+  $('at-scan-btn').disabled = true;
+  if($('at-getsib-btn')) $('at-getsib-btn').disabled = true;
+  const d = await atApi({action:'scan', type});
+  $('at-scan-btn').disabled = false;
+  if($('at-getsib-btn')) $('at-getsib-btn').disabled = false;
+
+  if(!d||!d.ok) { $('at-scan-status').textContent = ''; atScanErr('Request failed — CGI error'); return; }
+
+  const status = d.data.status;
+  const raw = (d.data.resp||{}).raw||'';
+  $('at-scan-status').textContent = '';
+
+  if(status === 'error' || status === 'timeout') {
+    atScanErr(AT_SCAN_HINTS[type] || ('Modem returned '+status.toUpperCase()+'. Raw: '+raw.trim()));
+    return;
+  }
+
+  let html = '<div class="at-out">';
+  if(type==='pciscan') {
+    const re = /\+PCISCAN:\s*(\d+),(\d+)/g;
+    let m; const rows = [];
+    while((m=re.exec(raw))!==null) rows.push({pci:m[1],earfcn:m[2]});
+    if(rows.length) {
+      html += '<table><thead><tr><th>PCI</th><th>EARFCN</th><th></th></tr></thead><tbody>';
+      rows.forEach(r=>{
+        html += '<tr><td>'+escHtml(r.pci)+'</td><td>'+escHtml(r.earfcn)+'</td>';
+        html += '<td><button class="btn sm" onclick="atLockCell(\''+r.pci+'\',\''+r.earfcn+'\')">Lock</button></td></tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<div class="dim">Scan returned 0 results — no cells detected</div>';
+    }
+  } else {
+    html += '<pre class="at-resp">'+escHtml(raw)+'</pre>';
+  }
+  html += '</div>';
+  $('at-scan-results').innerHTML = html;
+}
+
+function atScanErr(msg) {
+  $('at-scan-results').innerHTML = '<div class="alert err" style="margin-top:8px">'+escHtml(msg)+'</div>';
+}
+
+function atLockCell(pci, earfcn) {
+  atSetMode('lock', document.querySelector('#at-mode-btns button:nth-child(3)'));
+  setTimeout(()=>{ $('al-cmd').value = 'AT^PCILOCK='+pci+','+earfcn; }, 200);
+}
+
+// ── Cell Lock ─────────────────────────────────────────────────────────────────
+async function atLockRead() {
+  if(!atState.smd7Ok) return;
+  $('at-lock-status').textContent = 'reading…';
+  const d = await atApi({action:'cell_lock_read'});
+  if(!d||!d.ok) { $('at-lock-status').textContent = 'error'; return; }
+  $('at-lock-status').textContent = '';
+
+  const raw = d.data;
+
+  // AT^PCILOCK?
+  const pciRaw = raw['AT^PCILOCK?']||'';
+  const pciM = pciRaw.match(/\^PCILOCK:\s*(\d+),(\d+)/);
+  if(pciM) {
+    const locked = !(pciM[1]==='65535'&&pciM[2]==='65535');
+    $('al-pci').textContent = locked?'LOCKED':'unlocked';
+    $('al-pci').className = 'val '+(locked?'err':'ok');
+    $('al-pci-m').textContent = locked?('PCI='+pciM[1]+' EARFCN='+pciM[2]):'';
+  } else if(isErr(pciRaw)) {
+    $('al-pci').textContent = 'ERROR'; $('al-pci').className = 'val err';
+    $('al-pci-m').textContent = 'modem returned ERROR — command may not be supported';
+  }
+
+  // AT^EARFCNLOCK?
+  const efRaw = raw['AT^EARFCNLOCK?']||'';
+  const efM = efRaw.match(/\^EARFCNLOCK:\s*(\d+)/);
+  if(efM) {
+    const locked = efM[1]!=='65535';
+    $('al-earfcn').textContent = locked?('EARFCN='+efM[1]):'unlocked';
+    $('al-earfcn').className = 'val '+(locked?'err':'ok');
+  } else if(isErr(efRaw)) {
+    $('al-earfcn').textContent = 'ERROR'; $('al-earfcn').className = 'val err';
+  }
+
+  // AT^SYSCONFIG?
+  const scfgRaw = raw['AT^SYSCONFIG?']||'';
+  const scfgM = scfgRaw.match(/\^SYSCONFIG:\s*(\d+),(\d+),(\d+),(\d+)/);
+  if(scfgM) {
+    const mode = parseInt(scfgM[1]);
+    const modeStr = {2:'Auto',14:'GSM only',15:'WCDMA only',17:'LTE+WCDMA+GSM',20:'LTE only'}[mode]||('mode='+mode);
+    $('al-syscfg').textContent = modeStr;
+    $('al-syscfg').className = 'val';
+    $('al-syscfg-m').textContent = 'acq='+scfgM[2]+' roam='+scfgM[3];
+  } else if(isErr(scfgRaw)) {
+    $('al-syscfg').textContent = 'ERROR'; $('al-syscfg').className = 'val err';
+  }
+
+  // AT$QCBANDPREF?
+  const bpRaw = raw['AT$QCBANDPREF?']||'';
+  const bpM = bpRaw.match(/\$QCBANDPREF:\s*([0-9A-Fa-f]+)/);
+  if(bpM) {
+    $('al-band').textContent = '0x'+bpM[1]; $('al-band').className = 'val';
+  } else if(isErr(bpRaw)) {
+    $('al-band').textContent = 'ERROR'; $('al-band').className = 'val err';
+  } else {
+    $('al-band').textContent = '—'; $('al-band').className = 'val';
+  }
+}
+
+let _lockWarnTimer = null;
+let _lockWarnCancel = false;
+
+function atLockWrite() {
+  const cmd = $('al-cmd').value.trim();
+  if(!cmd) return;
+  if(!atState.smd7Ok) { toast('smd7 not ready',true); return; }
+  const tier = atClientTier(cmd);
+  if(tier==='blocked') { toast('Blocked command',true); return; }
+
+  // Amber warn bar, 1.5s delay
+  const bar = $('al-warn-bar');
+  bar.style.display='block';
+  $('al-countdown').textContent = '2';
+  _lockWarnCancel = false;
+  let count = 2;
+  _lockWarnTimer = setInterval(()=>{
+    if(_lockWarnCancel){ clearInterval(_lockWarnTimer); bar.style.display='none'; return; }
+    count--;
+    $('al-countdown').textContent = count;
+    if(count<=0) {
+      clearInterval(_lockWarnTimer);
+      bar.style.display='none';
+      if(!_lockWarnCancel) atLockWriteExec(cmd);
+    }
+  }, 750);
+}
+
+function atLockWriteCancel() {
+  _lockWarnCancel = true;
+}
+
+async function atLockWriteExec(cmd) {
+  $('at-lock-status').textContent = 'sending…';
+  const out = $('at-lock-out');
+  out.style.display='block';
+  const d = await atApi({action:'cell_lock_write', cmd});
+  $('at-lock-status').textContent = '';
+  if(!d||!d.ok) { out.innerHTML='<div class="at-resp err">Request failed</div>'; return; }
+  const resp = (d.data.resp||{}).raw||'';
+  const ok = d.data.status==='ok';
+  out.innerHTML='<div class="at-entry"><div class="at-cmd-line">'+escHtml(cmd)+'</div><div class="at-resp '+(ok?'':'err')+'">'+escHtml(resp)+'</div></div>';
+  atLockRead();
+}
+
+async function atUnlockAll() {
+  if(!atState.smd7Ok) { toast('smd7 not ready',true); return; }
+  $('at-lock-status').textContent = 'unlocking…';
+  const d = await atApi({action:'cell_unlock_all'});
+  $('at-lock-status').textContent = '';
+  if(!d||!d.ok) { toast('Unlock failed',true); return; }
+  const results = d.data||[];
+  let msg = 'Unlock: ';
+  results.forEach(r=>{ msg += r.ok?'✓ ':' ✗ '; });
+  toast(msg);
+  atLockRead();
+}
+
+// ── Radio/Bearer ──────────────────────────────────────────────────────────────
+async function atRadioRead() {
+  if(!atState.smd7Ok) return;
+  $('at-radio-status').textContent = 'reading…';
+  const d = await atApi({action:'radio_read'});
+  $('at-radio-status').textContent = '';
+  if(!d||!d.ok) { $('at-radio-status').textContent = 'read failed — CGI error'; return; }
+  const raw = d.data;
+
+  const cfunRaw = raw['AT+CFUN?']||'';
+  const cfunM = cfunRaw.match(/\+CFUN:\s*(\d+)/);
+  if(cfunM) {
+    const level = parseInt(cfunM[1]);
+    const labels = {0:'Off',1:'Full',4:'Airplane',5:'No SIM reset',6:'Reset (SIM off)',7:'Offline'};
+    $('ar-cfun').textContent = labels[level]||('CFUN='+level);
+    $('ar-cfun').className = 'val '+(level===1?'ok': level===4?'warn':'off');
+    $('ar-cfun-m').textContent = 'level '+level;
+  } else if(isErr(cfunRaw)) {
+    $('ar-cfun').textContent = 'ERROR'; $('ar-cfun').className = 'val err';
+    $('ar-cfun-m').textContent = 'modem returned ERROR';
+  }
+
+  const cgattRaw = raw['AT+CGATT?']||'';
+  const cgattM = cgattRaw.match(/\+CGATT:\s*(\d)/);
+  if(cgattM) {
+    $('ar-cgatt').textContent = cgattM[1]==='1'?'Attached':'Detached';
+    $('ar-cgatt').className = 'val '+(cgattM[1]==='1'?'ok':'off');
+  } else if(isErr(cgattRaw)) {
+    $('ar-cgatt').textContent = 'ERROR'; $('ar-cgatt').className = 'val err';
+  }
+
+  const cregRaw = raw['AT+CREG?']||'';
+  const cregM = cregRaw.match(/\+CREG:\s*\d+,(\d+)/);
+  if(cregM) {
+    const s = parseInt(cregM[1]);
+    const labels = {0:'Not reg',1:'Home',2:'Searching',3:'Denied',5:'Roaming'};
+    $('ar-creg').textContent = labels[s]||('stat='+s);
+    $('ar-creg').className = 'val '+((s===1||s===5)?'ok':'off');
+  } else if(isErr(cregRaw)) {
+    $('ar-creg').textContent = 'ERROR'; $('ar-creg').className = 'val err';
+  }
+
+  // CGDCONT table
+  const cgdRaw = raw['AT+CGDCONT?']||'';
+  const re = /\+CGDCONT:\s*(\d+),"([^"]*)","([^"]*)","([^"]*)"/g;
+  let m; const apns = [];
+  while((m=re.exec(cgdRaw))!==null) apns.push({cid:m[1],type:m[2],apn:m[3],ip:m[4]});
+  if(apns.length) {
+    $('at-apn-wrap').style.display='block';
+    $('ar-apn-rows').innerHTML = apns.map(a=>
+      '<tr><td>'+escHtml(a.cid)+'</td><td>'+escHtml(a.type)+'</td><td>'+escHtml(a.apn)+'</td><td>'+escHtml(a.ip)+'</td></tr>'
+    ).join('');
+  }
+}
+
+async function atRadioCfun(level) {
+  if(!atState.smd7Ok) { toast('smd7 not ready',true); return; }
+  // CFUN=1/4 → diag.cgi lte_control (has QCMAP coordination)
+  if(level===1||level===4) {
+    const state = level===1?'start':'stop';
+    $('at-radio-status').textContent = (level===1?'Starting LTE…':'Stopping LTE…');
+    const d = await api('diag.cgi',null,'POST',encode({action:'lte_control',state}));
+    $('at-radio-status').textContent = '';
+    if(d&&d.ok) { toast('CFUN='+level+' sent via lte_control'); atRadioRead(); }
+    else { toast('lte_control error',true); }
+    return;
+  }
+  // Other CFUN levels → at.cgi radio_write (warn tier, no modal)
+  const cmd = 'AT+CFUN='+level;
+  $('at-radio-status').textContent = 'sending '+cmd+'…';
+  const d = await atApi({action:'radio_write', cmd});
+  $('at-radio-status').textContent = '';
+  if(d&&d.ok) { toast(cmd+' → '+d.data.status); atRadioRead(); }
+  else { toast('Error',true); }
+}
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+async function atGps(action) {
+  if(!atState.smd7Ok) { toast('smd7 not ready',true); return; }
+  $('at-gps-status').textContent = 'sending…';
+  const map = {start:'gps_start',stop:'gps_stop',fix:'gps_fix'};
+  const d = await atApi({action:map[action]});
+  $('at-gps-status').textContent = '';
+  if(!d||!d.ok) { toast('Error',true); return; }
+  const out = $('at-gps-out');
+  out.style.display='block';
+  const resp = (d.data.resp||{}).raw||'';
+  const ok = d.data.status==='ok';
+  out.innerHTML='<div class="at-entry"><div class="at-cmd-line">GPS '+action+'</div><div class="at-resp '+(ok?'':'err')+'">'+escHtml(resp)+'</div></div>'+out.innerHTML;
+}
+
+// ── Free Terminal ─────────────────────────────────────────────────────────────
+function atTermKey(e) {
+  const h = atState.termHistory;
+  if(e.key==='Enter') { atTermSend(); return; }
+  if(e.key==='ArrowUp') {
+    atState.termHistIdx = Math.min(atState.termHistIdx+1, h.length-1);
+    if(h.length) $('at-term-cmd').value = h[atState.termHistIdx]||'';
+    e.preventDefault(); return;
+  }
+  if(e.key==='ArrowDown') {
+    atState.termHistIdx = Math.max(atState.termHistIdx-1, -1);
+    $('at-term-cmd').value = atState.termHistIdx<0?'': h[atState.termHistIdx]||'';
+    e.preventDefault(); return;
+  }
+}
+
+async function atTermSend() {
+  const cmd = $('at-term-cmd').value.trim();
+  if(!cmd) return;
+  if(!atState.smd7Ok) { atTermAppend(cmd,'smd7 not ready — check banner above','err',0,'safe'); return; }
+
+  const tier = atClientTier(cmd);
+  const out  = $('at-term-out');
+  const warn = $('at-term-warn');
+
+  // Push to history
+  const h = atState.termHistory;
+  h.unshift(cmd);
+  if(h.length>50) h.pop();
+  atState.termHistIdx = -1;
+  try{ localStorage.setItem('rt_at_history', JSON.stringify(h)); } catch(e){}
+
+  if(tier==='blocked') {
+    // Native confirm for destructive commands
+    if(!confirm('WARNING: "'+cmd+'" may reboot or brick the device.\n\nSend with force=1?')) return;
+    const d = await atApi({action:'send', cmd, force:'1'});
+    if(!d||!d.ok) { atTermAppend(cmd, 'Request failed', 'err', 0, tier); return; }
+    atTermAppend(cmd, (d.data.resp||{}).raw||d.data.raw||'(sent)', 'ok', 0, tier);
+    $('at-term-cmd').value='';
+    return;
+  }
+
+  if(tier==='warn') {
+    warn.style.display='block';
+    warn.innerHTML='&#9888; Write command — sending in <span id="at-term-count">2</span>s… <button class="btn sm" onclick="atTermWarnCancel()">Cancel</button>';
+    let count=2; let cancelled=false;
+    const t = setInterval(()=>{
+      if(cancelled){clearInterval(t);warn.style.display='none';return;}
+      count--; $('at-term-count').textContent=count;
+      if(count<=0){ clearInterval(t); warn.style.display='none'; if(!cancelled) doSend(); }
+    }, 750);
+    warn._cancel = ()=>{ cancelled=true; };
+    return;
+  }
+
+  doSend();
+
+  async function doSend(){
+    warn.style.display='none';
+    const t0=Date.now();
+    const d=await atApi({action:'send',cmd});
+    const elapsed=Date.now()-t0;
+    if(!d||!d.ok){ atTermAppend(cmd,'Request failed','err',elapsed,tier); return; }
+    const raw=(d.data.resp||{}).raw||'';
+    let cls=d.data.status==='ok'?'':'err';
+    if(d.data.status==='timeout') cls='timeout';
+    // Decode CME
+    let display=raw;
+    const cmeM=raw.match(/\+CME ERROR:\s*(\d+)/);
+    if(cmeM){ const desc=CME[parseInt(cmeM[1])]; if(desc) display+=' ['+desc+']'; }
+    atTermAppend(cmd,display,cls,elapsed,tier);
+    $('at-term-cmd').value='';
+  }
+}
+
+function atTermWarnCancel() {
+  const warn=$('at-term-warn');
+  if(warn._cancel) warn._cancel();
+  warn.style.display='none';
+}
+
+function atTermAppend(cmd, resp, cls, elapsed, tier) {
+  const out=$('at-term-out');
+  const nbCls={safe:'safe',warn:'warn',blocked:'blocked'}[tier]||'safe';
+  const entry=document.createElement('div');
+  entry.className='at-entry';
+  entry.innerHTML='<div class="at-cmd-line">'+escHtml(cmd)+
+    '<span class="at-nb '+nbCls+'">'+tier+'</span>'+
+    '<span class="at-elapsed">'+elapsed+'ms</span></div>'+
+    '<div class="at-resp '+cls+'">'+escHtml(resp)+'</div>';
+  out.insertBefore(entry, out.firstChild);
+  // Keep max 200 entries
+  while(out.children.length>200) out.removeChild(out.lastChild);
+}
+
+function atTermExport() {
+  const out=$('at-term-out');
+  let txt='';
+  out.querySelectorAll('.at-entry').forEach(e=>{
+    const cmd=e.querySelector('.at-cmd-line');
+    const resp=e.querySelector('.at-resp');
+    if(cmd) txt+=(cmd.textContent||'')+'\n';
+    if(resp) txt+=(resp.textContent||'')+'\n\n';
+  });
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='at_session_'+Date.now()+'.txt';
+  a.click();
+}
+
+// Client-side tier mirror (server is authoritative — this is UX only)
+function atClientTier(cmd) {
+  const c=cmd.toUpperCase();
+  if(/^AT\+POWEROFF|^AT\$QCPWRDN|^AT\^RESET|^AT\+WLANCONFDEL|^AT\+MEIGEDL|^AT\+SYSCMD|^AT\+SLEEPEN|^AT\+WDISABLEEN/.test(c)) return 'blocked';
+  if(/PCILOCK=|EARFCNLOCK=|BANDLOCK=|SYSCONFIG=|CFUN=|QCBANDPREF=|WIFIPSK=/.test(c)) return 'warn';
+  return 'safe';
+}
+
+function atToggle(id, btn) {
+  const el = $(id);
+  if(!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if(btn) btn.textContent = (open ? '▼' : '▲') + btn.textContent.slice(1);
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Load AT history from localStorage
+(function(){
+  try{ atState.termHistory=JSON.parse(localStorage.getItem('rt_at_history')||'[]'); }catch(e){}
+})();
+
+// ─── USB / Debug ──────────────────────────────────────────────────────────────
+
+const USB_MODES = [
+  { mode: 1,  pid: 'f601', funcs: 'diag,serial,adb,rmnet',
+    name: 'Classic DIAG + RMNET',
+    desc: 'Qualcomm\'s classic debug composition. Exposes a DIAG diagnostics port, 3× AT serial (SMD), ADB, and RMNET (QMI-over-USB). Required for QPST, QXDM, and QCDM on Windows — needs Qualcomm USB drivers. Best for on-host QCSuper via USB cable.' },
+  { mode: 9,  pid: 'f622', funcs: 'rndis,diag,serial,adb',
+    name: 'RNDIS + DIAG (Device Default)',
+    desc: 'The factory default. RNDIS creates a USB Ethernet adapter on Windows using built-in CDC-RNDIS drivers — no Qualcomm drivers needed for networking. Includes DIAG, 3× serial, and ADB. WCEIS flag set for Windows RNDIS compatibility.' },
+  { mode: 18, pid: 'f603', funcs: 'diag,serial,adb,ecm_qc',
+    name: 'ECM + DIAG (Linux / macOS)',
+    desc: 'CDC-ECM (Ethernet Control Model) USB networking — works natively on Linux and macOS without installing any drivers. Includes DIAG, 3× serial (SMD), and ADB. Use this when debugging from a Linux host or macOS.' },
+  { mode: 19, pid: '9085', funcs: 'diag,adb,usb_mbim,gps',
+    name: 'MBIM + GPS (Windows native)',
+    desc: 'Mobile Broadband Interface Model — Windows 8+ connects via the built-in WWAN stack, no Qualcomm drivers required. Also exposes DIAG, ADB, and a GPS/NMEA serial port. Useful for testing MBIM stack or Windows-native carrier attach.' },
+  { mode: 20, pid: '9025', funcs: 'diag,serial,rmnet,adb',
+    name: 'Stock Web UI Mode (0x9025)',
+    desc: 'The composition selected by Orbic\'s stock web interface (stored in /data/usb/hsusb_next). Exposes DIAG, 3× serial, RMNET, and ADB. Functionally similar to Mode 1 but with a different USB PID. Use to match stock device behaviour.' },
+];
+
+let usbSelectedMode = null;
+
+function usbFnBadges(funcs) {
+  const FN_CLASS = {diag:'diag', rndis:'rndis', serial:'serial', adb:'adb',
+                    rmnet:'rmnet', ecm_qc:'ecm_qc', ecm:'ecm', usb_mbim:'usb_mbim', gps:'gps'};
+  return funcs.split(',').map(f => {
+    const cls = FN_CLASS[f] || '';
+    return `<span class="usb-fn ${cls}">${escHtml(f)}</span>`;
+  }).join('');
+}
+
+function usbRenderModes(currentMode) {
+  const list = $('usb-mode-list');
+  if (!list) return;
+  if (usbSelectedMode === null) usbSelectedMode = currentMode || '9';
+  list.innerHTML = USB_MODES.map(m => {
+    const sel = String(m.mode) === String(usbSelectedMode);
+    const cur = String(m.mode) === String(currentMode);
+    return `<div class="usb-mode-row${sel?' selected':''}" onclick="usbSelectMode(${m.mode})">
+      <div class="usb-mode-num">${m.mode}</div>
+      <div class="usb-mode-info">
+        <div class="usb-mode-name">${escHtml(m.name)}</div>
+        <div class="usb-mode-funcs">${usbFnBadges(m.funcs)}</div>
+        <div class="usb-mode-desc" style="margin-top:5px">${escHtml(m.desc)}</div>
+      </div>
+      <div class="usb-mode-badges">
+        ${cur ? '<span class="usb-cur-badge">SAVED</span>' : ''}
+        <span class="usb-pid">0x${m.pid}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function usbSelectMode(mode) {
+  usbSelectedMode = String(mode);
+  // re-render to update selection highlight without re-fetching
+  const rows = document.querySelectorAll('.usb-mode-row');
+  rows.forEach((r, i) => {
+    const m = USB_MODES[i];
+    const sel = m && String(m.mode) === usbSelectedMode;
+    r.classList.toggle('selected', !!sel);
+    const nameEl = r.querySelector('.usb-mode-name');
+    const numEl  = r.querySelector('.usb-mode-num');
+    if (nameEl) nameEl.style.color = sel ? '' : '';
+  });
+  // Simpler: just re-render (uses cached currentMode)
+  loadUsb();
+}
+
+async function loadUsb() {
+  const d = await api('usb.cgi', 'action=status');
+  if (!d.ok) { alert2('usb-alert', 'USB status fetch failed: ' + d.error, true); return; }
+  alert2('usb-alert', '', false);
+  const s = d.data;
+
+  // Status cards
+  const modeObj = USB_MODES.find(m => String(m.mode) === String(s.mode));
+  $('usb-sc-mode').textContent = s.mode || '—';
+  $('usb-sc-mode').className = 'val';
+  $('usb-sc-mode-meta').textContent = modeObj ? modeObj.name : '';
+  $('usb-sc-funcs').textContent = s.functions || '—';
+  $('usb-sc-pid').textContent = s.product_id ? '0x' + s.product_id : '';
+  const diagEl = $('usb-sc-diag');
+  diagEl.textContent = s.diag_live ? 'ACTIVE' : 'HIDDEN';
+  diagEl.className = 'val ' + (s.diag_live ? 'ok' : 'warn');
+
+  // One-shot mode banner
+  const tmpEl = $('usb-sc-tmp');
+  if (s.tmp_mode && s.tmp_mode !== '') {
+    const tmpObj = USB_MODES.find(m => String(m.mode) === String(s.tmp_mode));
+    $('usb-sc-tmp-val').textContent = 'Mode ' + s.tmp_mode + (tmpObj ? ' — ' + tmpObj.name : '');
+    tmpEl.style.display = '';
+  } else {
+    tmpEl.style.display = 'none';
+  }
+
+  // DIAG toggle
+  const chk = $('usb-diag-chk');
+  chk.checked = !!s.diag_live;
+  chk.disabled = false;
+  const banner = $('usb-diag-banner');
+  const dot    = $('usb-diag-dot');
+  const txt    = $('usb-diag-txt');
+  if (s.diag_live) {
+    banner.className = 'usb-diag-banner active';
+    dot.className = 'at-dot ok';
+    txt.textContent = 'DIAG ACTIVE — Qualcomm diagnostics port exposed to USB host';
+  } else {
+    banner.className = 'usb-diag-banner inactive';
+    dot.className = 'at-dot warn';
+    txt.textContent = 'DIAG HIDDEN — diagnostics port not in current USB functions';
+  }
+
+  // Mode selector
+  usbRenderModes(s.mode);
+}
+
+async function usbSaveMode(persist) {
+  if (!usbSelectedMode) { toast('Select a mode first', true); return; }
+  const d = await api('usb.cgi', 'action=set_mode&mode=' + usbSelectedMode + '&persist=' + persist);
+  if (!d.ok) { toast('Save failed: ' + d.error, true); return; }
+  if (persist) {
+    toast('Mode ' + usbSelectedMode + ' saved — reboot to apply');
+  } else {
+    toast('Mode ' + usbSelectedMode + ' queued for next boot');
+  }
+  loadUsb();
+}
+
+async function usbLiveApply() {
+  if (!usbSelectedMode) { toast('Select a mode first', true); return; }
+  const modeObj = USB_MODES.find(m => String(m.mode) === String(usbSelectedMode));
+  if (!modeObj) { toast('Unknown mode', true); return; }
+
+  // Hard safety check: only allow live apply if ADB is present in the target functions.
+  // Without ADB, the adb forward tcp:8889 tunnel dies permanently and access is lost.
+  if (!modeObj.funcs.split(',').includes('adb')) {
+    alert('BLOCKED: Mode ' + usbSelectedMode + ' does not include ADB.\n\n' +
+          'Live-applying this mode would sever the ADB tunnel and lock you out.\n' +
+          'Use "Save Persistent" + reboot instead, while ensuring you have an\n' +
+          'alternative access path (e.g. WiFi / serial console) before rebooting.');
+    return;
+  }
+
+  // Typed confirmation — makes the user read and acknowledge the risk explicitly
+  const answer = prompt(
+    'CONFIRM LIVE USB SWITCH\n\n' +
+    'Mode ' + usbSelectedMode + ': ' + modeObj.name + '\n' +
+    'Functions: ' + modeObj.funcs + '\n\n' +
+    'USB (RNDIS + ADB) will disconnect for ~5 seconds then reconnect.\n' +
+    'If ADB does not recover, unplug/replug the USB cable.\n\n' +
+    'Type "apply" to proceed:'
+  );
+  if (!answer || answer.trim().toLowerCase() !== 'apply') { toast('Cancelled'); return; }
+
+  const save = await api('usb.cgi', 'action=set_mode&mode=' + usbSelectedMode + '&persist=1');
+  if (!save.ok) { toast('Save failed: ' + save.error, true); return; }
+  const d = await api('usb.cgi', 'action=live_apply');
+  if (!d.ok) { toast('Apply failed: ' + d.error, true); return; }
+  usbStartCountdown('usb-apply-countdown', 10, 'USB reconnected — refresh if page is unresponsive', loadUsb);
+}
+
+async function setUsbDiag(enable) {
+  const chk = $('usb-diag-chk');
+  // Revert checkbox optimistically — only commit after user confirms
+  chk.checked = !enable;
+  const answer = prompt(
+    (enable ? 'ENABLE' : 'DISABLE') + ' Qualcomm DIAG over USB\n\n' +
+    'USB will briefly disconnect (~5 s) then reconnect.\n' +
+    'ADB tunnel will drop — re-run "adb forward tcp:8889 tcp:8888" after reconnect.\n\n' +
+    'Type "apply" to proceed:'
+  );
+  if (!answer || answer.trim().toLowerCase() !== 'apply') { toast('Cancelled'); return; }
+  chk.checked = enable;  // restore
+  chk.disabled = true;
+  const d = await api('usb.cgi', 'action=diag_usb_set&enable=' + (enable ? '1' : '0'));
+  if (!d.ok) { toast('DIAG toggle failed: ' + d.error, true); chk.checked = !enable; chk.disabled = false; return; }
+  usbStartCountdown('usb-diag-countdown', 10, 'DIAG ' + (enable ? 'enabled' : 'hidden') + ' — re-run adb forward if needed', () => {
+    chk.disabled = false;
+    loadUsb();
+  });
+}
+
+function usbStartCountdown(spanId, secs, doneMsg, cb) {
+  const el = $(spanId);
+  el.style.display = '';
+  let n = secs;
+  el.textContent = 'USB reconnecting… ' + n + 's';
+  const iv = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(iv);
+      el.style.display = 'none';
+      toast(doneMsg);
+      if (cb) cb();
+    } else {
+      el.textContent = 'USB reconnecting… ' + n + 's';
+    }
+  }, 1000);
+}
+
+// ── tab integration: check on AT tab open ─────────────────────────────────────
+function atOnTabOpen() {
+  atCheck();
+  // Re-enter current mode (restore poll if intel mode)
+  if(atState.mode==='intel') atPollChange();
 }
 
 initLinks();

@@ -34,7 +34,7 @@
 - [Step 17 — Staging PortableApps for the RC400L](#step-17--staging-portableapps-for-the-rc400l)
 
 ### Phase 4 — Exploitation & Tool Development
-- [Step 18 — The TR-069 Rabbit Hole *(dead end)*](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
+- [Step 18 — The TR-069 Rabbit Hole (cwmpCPE)](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
 - [Step 19 — The SMB Dead End *(dead end)*](#step-19--the-smb-dead-end)
 - [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
 - [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
@@ -885,7 +885,7 @@ export PATH=/cache/bin:$PATH
 ### Phase 4 — Exploitation & Tool Development
 
 <details>
-<summary><strong>Step 18 — The TR-069 Rabbit Hole (cwmpCPE) [dead end]</strong></summary>
+<summary><strong>Step 18 — The TR-069 Rabbit Hole (cwmpCPE)</strong></summary>
 
 ## Step 18 — The TR-069 Rabbit Hole (cwmpCPE)
 
@@ -1417,7 +1417,7 @@ Full comparison of the QMI infrastructure on both devices: binary sizes, library
 
 Static analysis of the Orbic `atfwd_daemon` (164 KB, ARM stripped ELF). Covers all 44 registered AT commands, QMI services accessed, QCMAP C++ interface, Meige module origin, and a full security assessment including: RSA private key embedded in binary, IMEI-derived WiFi PSK via AES, unauthenticated AT command socket (`/tmp/at-interface.srv.sock → AT+SYSCMD` = local root without inittab), `+GETSIB`/`+PCISCAN` as an AT-based alternative to Rayhunter's DIAG path, unconstrained GPIO control, active voice QMI on a data-only device, and shared-firmware implications across the Meige module customer base.
 
-→ [SideQuests/atfwd_reversal.md](SideQuests/atfwd_reversal.md)
+→ [SideQuests/atfwd_re.md](SideQuests/atfwd_re.md)
 
 </details>
 
@@ -1478,7 +1478,7 @@ Documents the rayhunter fork deployed on this RC400L: a reference table of all 1
 - [Step 17 — Staging PortableApps for the RC400L](#step-17--staging-portableapps-for-the-rc400l)
 
 ### Phase 4 — Exploitation & Tool Development
-- [Step 18 — The TR-069 Rabbit Hole *(dead end)*](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
+- [Step 18 — The TR-069 Rabbit Hole (cwmpCPE)](#step-18--the-tr-069-rabbit-hole-cwmpcpe)
 - [Step 19 — The SMB Dead End *(dead end)*](#step-19--the-smb-dead-end)
 - [Step 20 — Getting tcpdump Working: Escaping the Capability Jail](#step-20--getting-tcpdump-working-escaping-the-capability-jail)
 - [Step 21 — Live iptables Control: QCMAP-Safe Daemon Architecture](#step-21--live-iptables-control-qcmap-safe-daemon-architecture)
