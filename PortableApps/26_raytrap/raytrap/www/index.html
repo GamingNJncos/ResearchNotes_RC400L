@@ -1022,11 +1022,9 @@ tr:hover td{background:#071520}
       <span class="dim" style="font-size:11px" id="usb-diag-spin" style="display:none"></span>
     </div>
     <div class="panel-body">
-      <p style="color:#3a6080;font-size:12px;margin-bottom:10px;line-height:1.6">
-        The Qualcomm DIAG interface exposes <code>/dev/diag</code> as a USB serial port to the host.
-        When active, tools such as <strong>QCSuper</strong>, QXDM, and QPST can connect via USB cable.
-        This toggle adds or removes <code>diag</code> from the live USB gadget functions
-        without changing the composition mode. Effective immediately — USB briefly reconnects.
+      <p style="color:#3a6080;font-size:12px;margin-bottom:10px">
+        Enable/Disable <code>/dev/diag</code> on current mode.<br>
+        Effective immediately — USB will disconnect.
       </p>
       <div id="usb-diag-banner" class="usb-diag-banner inactive">
         <span id="usb-diag-dot" class="at-dot warn"></span>
