@@ -62,6 +62,26 @@ if [ -d /sys/class/net/rmnet0 ]; then
     RMNET0_IP=$(ip addr show rmnet0 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
 fi
 
+# ── wlan0 state ───────────────────────────────────────────────────────────────
+WLAN0_UP=false
+if [ -d /sys/class/net/wlan0 ]; then
+    [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = "up" ] && WLAN0_UP=true
+fi
+
+# ── usb0 state ────────────────────────────────────────────────────────────────
+USB0_UP=false
+if [ -d /sys/class/net/usb0 ]; then
+    [ "$(cat /sys/class/net/usb0/operstate 2>/dev/null)" = "up" ] && USB0_UP=true
+fi
+
+# ── rayhunter process ─────────────────────────────────────────────────────────
+RH_PID=$(find_pid "rayhunter")
+RH_RUN=false; [ -n "$RH_PID" ] && RH_RUN=true
+
+# ── httpd (busybox thttpd/httpd) ──────────────────────────────────────────────
+# Always true when this CGI executes — we are being served
+HTTPD_RUN=true
+
 # ── tcpdump running ───────────────────────────────────────────────────────────
 CAP_RUN=false
 [ -f /cache/raytrap/captures/tcpdump.pid ] && \
@@ -99,6 +119,11 @@ printf '"wlan1_state":%s,' "$(jstr "$WLAN1_STATE")"
 printf '"wlan1_ip":%s,' "$(jstr "$WLAN1_IP")"
 printf '"rmnet0_up":%s,' "$RMNET0_UP"
 printf '"rmnet0_ip":%s,' "$(jstr "$RMNET0_IP")"
+printf '"wlan0_up":%s,' "$WLAN0_UP"
+printf '"usb0_up":%s,' "$USB0_UP"
+printf '"rayhunter_running":%s,' "$RH_RUN"
+printf '"rayhunter_pid":%s,' "${RH_PID:-null}"
+printf '"httpd_running":%s,' "$HTTPD_RUN"
 printf '"cap_running":%s,' "$CAP_RUN"
 printf '"rule_count":%d,' "$RULE_COUNT"
 printf '"uptime":%s,' "$(jstr "$UPTIME")"

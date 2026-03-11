@@ -199,6 +199,19 @@ tr.nas-row-alert td{background:#200a0a}
 #cowbell-trigger:hover{color:#3a6080}
 .coming-soon{color:#1a3050;font-size:12px;padding:20px 0;text-align:center;letter-spacing:2px;text-transform:uppercase}
 
+/* Persistent top bar */
+#top-bar{display:flex;align-items:center;gap:0;padding:4px 14px;background:#030d18;border-bottom:1px solid #0d2035;font-size:11px;min-height:26px;flex-shrink:0;overflow:hidden}
+#top-bar .tb-cluster{display:flex;align-items:center;gap:8px}
+#top-bar .tb-sep{width:1px;height:14px;background:#1a3050;margin:0 10px;flex-shrink:0}
+#top-bar .tb-label{color:#1a4060;text-transform:uppercase;letter-spacing:1.5px;font-size:10px;flex-shrink:0;margin-right:2px}
+#top-bar .tb-item{display:flex;align-items:center;gap:3px;color:#3a6080;white-space:nowrap}
+#top-bar .tb-item .tbi{font-size:9px}
+#top-bar .tb-item.ok .tbi{color:#00c060}
+#top-bar .tb-item.warn .tbi{color:#887730}
+#top-bar .tb-item.err .tbi{color:#c04040}
+#top-bar .tb-item.ok{color:#4a8060}
+#top-bar .tb-item.err{color:#804040}
+
 /* USB / Debug tab */
 .usb-mode-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid #0d2035;border-radius:3px;background:#071018;cursor:pointer;margin-bottom:6px;transition:border-color .15s}
 .usb-mode-row:hover{border-color:#1e3a5f}
@@ -253,6 +266,24 @@ tr.nas-row-alert td{background:#200a0a}
   <button data-tab="usb">USB / Debug</button>
   <button data-tab="cowbell" id="nav-cowbell" style="display:none">&#x1F404; COWBELL</button>
 </nav>
+
+<div id="top-bar">
+  <span class="tb-label">Interfaces</span>
+  <div class="tb-cluster">
+    <span class="tb-item" id="tb-rmnet0"><span class="tbi">●</span>rmnet0</span>
+    <span class="tb-item" id="tb-wlan0"><span class="tbi">●</span>wlan0</span>
+    <span class="tb-item" id="tb-wlan1"><span class="tbi">●</span>wlan1</span>
+    <span class="tb-item" id="tb-usb0"><span class="tbi">●</span>usb0</span>
+  </div>
+  <div class="tb-sep"></div>
+  <span class="tb-label">Processes</span>
+  <div class="tb-cluster">
+    <span class="tb-item" id="tb-rayhunter"><span class="tbi">●</span>rayhunter</span>
+    <span class="tb-item" id="tb-proxy"><span class="tbi">●</span>proxy</span>
+    <span class="tb-item" id="tb-ipt"><span class="tbi">●</span>ipt</span>
+    <span class="tb-item" id="tb-httpd"><span class="tbi">●</span>httpd</span>
+  </div>
+</div>
 
 <main>
 
@@ -1308,6 +1339,36 @@ function setDot(id, state){
   el.className = 'dot ' + (state==='ok'?'ok':state==='err'?'err':'warn');
 }
 
+// ─── Persistent Top Bar ─────────────────────────────────────────────────────
+function setTb(id, on) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'tb-item ' + (on ? 'ok' : 'err');
+}
+
+function updateTopBar(s) {
+  setTb('tb-rmnet0',    s.rmnet0_up);
+  setTb('tb-wlan0',     s.wlan0_up);
+  setTb('tb-wlan1',     s.wlan1_up);
+  setTb('tb-usb0',      s.usb0_up);
+  setTb('tb-rayhunter', s.rayhunter_running);
+  setTb('tb-proxy',     s.proxy_running);
+  setTb('tb-ipt',       s.ipt_running);
+  setTb('tb-httpd',     s.httpd_running !== false);
+}
+
+// Poll top bar every 15s regardless of active tab
+(function startTopBarPoll() {
+  function poll() {
+    fetch('cgi-bin/status.cgi?action=all')
+      .then(r => r.json())
+      .then(j => { if (j.ok && j.data) updateTopBar(j.data); })
+      .catch(() => {});
+  }
+  poll();
+  setInterval(poll, 15000);
+})();
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
 const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wifi:loadWifi, routing:loadRouting, capture:loadCapture, at:atOnTabOpen, usb:loadUsb };
@@ -1352,6 +1413,7 @@ async function loadDash(){
   setDot('ds-proxy', s.proxy_running?'ok':'warn');
   setDot('ds-wifi', s.wpa_running?'ok':'warn');
   setDot('ds-cap', s.cap_running?'ok':'warn');
+  updateTopBar(s);
 
   // System table
   const rows = [
