@@ -52,7 +52,7 @@ if [ -r "$SMD7" ]; then
             CESQ_VALS="${CESQ_LINE#+CESQ: }"
             RSRP_IDX=$(printf '%s' "$CESQ_VALS" | cut -d, -f6 | tr -d ' ')
             if [ -n "$RSRP_IDX" ] && [ "$RSRP_IDX" != "255" ] 2>/dev/null; then
-                RSRP_VAL=$(( RSRP_IDX - 141 ))
+                RSRP_VAL=$(( RSRP_IDX - 140 ))
             fi
         fi
     fi
