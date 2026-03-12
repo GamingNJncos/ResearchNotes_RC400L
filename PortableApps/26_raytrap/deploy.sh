@@ -449,6 +449,7 @@ tr -d '\r' < "$DEST/start.sh" > /tmp/cgi_strip && cp /tmp/cgi_strip "$DEST/start
 chmod 755 "$DEST/start.sh" && ok "start.sh"
 
 cp "$SRC/www/index.html" "$DEST/www/index.html" && ok "index.html"
+cp "$SRC/www/captive.html" "$DEST/www/captive.html" && ok "captive.html"
 
 for CGI in status firewall proxy wifi routing capture diag at usb stream_proxy arp handshake fb_upload cell system clients dns probe portal; do
     cp "$SRC/www/cgi-bin/${CGI}.cgi" "$DEST/www/cgi-bin/${CGI}.cgi"
