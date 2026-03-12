@@ -264,6 +264,7 @@ tr.nas-row-alert td{background:#200a0a}
   <button data-tab="capture">Capture</button>
   <button data-tab="at">AT Terminal</button>
   <button data-tab="usb">USB / Debug</button>
+  <button data-tab="cell">&#x1F4F6; Cell Intel</button>
   <button data-tab="cowbell" id="nav-cowbell" style="display:none">&#x1F404; COWBELL</button>
 </nav>
 
@@ -1203,6 +1204,76 @@ tr.nas-row-alert td{background:#200a0a}
 
 </section>
 
+<!-- ═════════════════════ CELL INTELLIGENCE ═════════════════════ -->
+<section id="tab-cell" class="tab-content">
+
+  <!-- Serving Cell Data -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4F6; Serving Cell</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="dim" id="cell-last-update" style="font-size:11px"></span>
+        <button class="btn sm" onclick="loadCell()">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="cell-data-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">
+        <div class="svc-card"><div class="name">RAT</div><div class="val" id="cd-rat">—</div></div>
+        <div class="svc-card"><div class="name">PLMN</div><div class="val" id="cd-plmn">—</div><div class="meta" id="cd-mccmnc"></div></div>
+        <div class="svc-card"><div class="name">TAC</div><div class="val" id="cd-tac">—</div></div>
+        <div class="svc-card"><div class="name">Cell CI</div><div class="val" id="cd-ci">—</div></div>
+        <div class="svc-card"><div class="name">eNB ID</div><div class="val" id="cd-enb">—</div></div>
+        <div class="svc-card"><div class="name">Cell ID</div><div class="val" id="cd-cellid">—</div></div>
+        <div class="svc-card"><div class="name">Band</div><div class="val" id="cd-band">—</div></div>
+        <div class="svc-card"><div class="name">EARFCN</div><div class="val" id="cd-earfcn">—</div></div>
+        <div class="svc-card"><div class="name">PCI</div><div class="val" id="cd-pci">—</div></div>
+        <div class="svc-card"><div class="name">RSRP</div><div class="val" id="cd-rsrp">—</div><div class="meta">dBm</div></div>
+        <div class="svc-card"><div class="name">RSRQ</div><div class="val" id="cd-rsrq">—</div><div class="meta">dB</div></div>
+        <div class="svc-card"><div class="name">SINR</div><div class="val" id="cd-sinr">—</div><div class="meta">dB</div></div>
+      </div>
+      <div id="cell-error" class="dim" style="font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+  </div>
+
+  <!-- IMSI-Catcher Heuristics -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x26A0; IMSI-Catcher Detection</h3>
+      <span class="dim" style="font-size:11px">Heuristic scoring — not definitive</span>
+    </div>
+    <div class="panel-body">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+        <div>
+          <div class="name" style="font-size:11px;color:#3a6080;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Risk Score</div>
+          <div id="cell-score-val" style="font-size:36px;font-weight:bold;color:#00ff88">0</div>
+        </div>
+        <div>
+          <div id="cell-risk-label" style="font-size:16px;font-weight:bold;color:#00ff88;margin-bottom:6px">Normal</div>
+          <div id="cell-risk-bar" style="width:200px;height:8px;background:#0d2035;border-radius:4px;overflow:hidden">
+            <div id="cell-risk-fill" style="width:0%;height:100%;background:#00ff88;transition:width .4s,background .4s;border-radius:4px"></div>
+          </div>
+        </div>
+      </div>
+      <div id="cell-alerts" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px">
+        <span class="dim" style="font-size:12px">No alerts. Awaiting data…</span>
+      </div>
+      <div style="margin-top:12px;border-top:1px solid #0d2035;padding-top:10px">
+        <div class="dim" style="font-size:11px;margin-bottom:6px;color:#3a6080">HEURISTIC LEGEND</div>
+        <div style="font-size:11px;color:#3a6080;line-height:1.8">
+          +2 RSRP &gt; -65 dBm (abnormal signal strength)<br>
+          +3 TAC changed between polls<br>
+          +4 PLMN changed between polls<br>
+          +3 CI reused at different EARFCN<br>
+          +5 EMM reject cause 3 or 6 (IMSI unknown / illegal ME)<br>
+          +2 SINR anomaly (&gt; 25 dB with RSRP &lt; -80)<br>
+          +3 Tech downgrade (LTE → GSM/UTRAN)
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
 <!-- ═══════════════════════ COWBELL ═══════════════════════ -->
 <section id="tab-cowbell" class="tab-content">
 
@@ -1396,6 +1467,7 @@ function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
   if (name === 'cowbell') { setTimeout(loadArp, 100); setTimeout(fbInfo, 200); }
   if (name === 'capture') { setTimeout(loadHandshakes, 100); }
+  if (name === 'cell') { setTimeout(loadCell, 100); }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   $('tab-'+name).classList.add('active');
   document.querySelector('[data-tab="'+name+'"]').classList.add('active');
@@ -3435,6 +3507,149 @@ function fbUpload() {
     .then(j => { status.textContent = j.ok ? '✓ Uploaded (' + (j.data.bytes_written || '?') + ' bytes)' : 'Error: ' + j.error; })
     .catch(e => { status.textContent = 'Upload error: ' + e.message; });
 }
+
+// ─── Cell Intelligence ─────────────────────────────────────────────────────────────────────────────────
+const cellState = {
+  prev: null,          // last poll's key fields for delta heuristics
+  pollTimer: null
+};
+
+function cellSet(id, val, cls) {
+  const el = $(id); if (!el) return;
+  el.textContent = (val !== null && val !== undefined && val !== '') ? val : '—';
+  el.className = 'val' + (cls ? ' ' + cls : '');
+}
+
+function cellScore(d) {
+  let score = 0;
+  const alerts = [];
+  const p = cellState.prev;
+
+  // 1. RSRP > -65 dBm
+  const rsrp = d.cell.rsrp !== null ? d.cell.rsrp : (d.qcsq.rsrp !== null ? d.qcsq.rsrp : null);
+  if (rsrp !== null && rsrp > -65) {
+    score += 2; alerts.push({ text: '⚠ Strong signal (' + rsrp + ' dBm)', cls: 'warn' });
+  }
+
+  // 2. TAC change
+  if (p && d.cereg.tac && p.tac && d.cereg.tac !== p.tac) {
+    score += 3; alerts.push({ text: '⚠ TAC changed (' + p.tac + ' → ' + d.cereg.tac + ')', cls: 'err' });
+  }
+
+  // 3. PLMN change
+  if (p && d.cops.plmn && p.plmn && d.cops.plmn !== p.plmn) {
+    score += 4; alerts.push({ text: '⚠ PLMN changed (' + p.plmn + ' → ' + d.cops.plmn + ')', cls: 'err' });
+  }
+
+  // 4. CI reuse at different EARFCN
+  if (p && d.cereg.ci && p.ci && d.cereg.ci === p.ci && d.cell.earfcn !== null && p.earfcn !== null && d.cell.earfcn !== p.earfcn) {
+    score += 3; alerts.push({ text: '⚠ CI reused on new EARFCN (' + p.earfcn + ' → ' + d.cell.earfcn + ')', cls: 'err' });
+  }
+
+  // 5. EMM reject cause 3 or 6
+  const rc = d.cereg.reject_cause;
+  if (rc === 3 || rc === 6) {
+    score += 5; alerts.push({ text: '⚠ EMM reject cause ' + rc + (rc === 3 ? ' (IMSI unknown in HLR)' : ' (Illegal ME)'), cls: 'err' });
+  }
+
+  // 6. SINR anomaly: very high SINR with weak RSRP
+  const sinr = d.cell.sinr !== null ? d.cell.sinr : null;
+  if (sinr !== null && sinr > 25 && rsrp !== null && rsrp < -80) {
+    score += 2; alerts.push({ text: '⚠ SINR anomaly (' + sinr + ' dB / ' + rsrp + ' dBm)', cls: 'warn' });
+  }
+
+  // 7. Tech downgrade
+  const rat = (d.cnti || d.cereg.act_name || '').toUpperCase();
+  if (p && p.rat && (p.rat === 'LTE' || p.rat === 'NR') && (rat === 'GSM' || rat === 'UTRAN' || rat === 'WCDMA')) {
+    score += 3; alerts.push({ text: '⚠ Tech downgrade (' + p.rat + ' → ' + rat + ')', cls: 'err' });
+  }
+
+  return { score, alerts };
+}
+
+function cellRender(d) {
+  // Serving cell fields
+  const rsrp = d.cell.rsrp !== null ? d.cell.rsrp : d.qcsq.rsrp;
+  const rsrq = d.cell.rsrq !== null ? d.cell.rsrq : null;
+  const sinr = d.cell.sinr !== null ? d.cell.sinr : null;
+
+  const rsrpCls = rsrp === null ? '' : rsrp > -65 ? 'warn' : rsrp > -85 ? 'ok' : rsrp > -100 ? '' : 'err';
+  const ratDisp = d.cnti || d.cereg.act_name || '';
+
+  cellSet('cd-rat', ratDisp, ratDisp === 'LTE' ? 'ok' : (ratDisp === 'GSM' || ratDisp === 'UTRAN') ? 'warn' : '');
+  cellSet('cd-plmn', d.cops.plmn || '');
+  const mccmnc = $('cd-mccmnc'); if (mccmnc) mccmnc.textContent = d.cops.mcc && d.cops.mnc ? 'MCC ' + d.cops.mcc + ' MNC ' + d.cops.mnc : '';
+  cellSet('cd-tac', d.cereg.tac || '');
+  cellSet('cd-ci', d.cereg.ci || '');
+  cellSet('cd-enb', d.enb_id !== null ? d.enb_id : '');
+  cellSet('cd-cellid', d.cell_id !== null ? d.cell_id : '');
+  cellSet('cd-band', d.cell.band !== null ? 'B' + d.cell.band : '');
+  cellSet('cd-earfcn', d.cell.earfcn !== null ? d.cell.earfcn : '');
+  cellSet('cd-pci', d.cell.pci !== null ? d.cell.pci : '');
+  cellSet('cd-rsrp', rsrp !== null ? rsrp : '', rsrpCls);
+  cellSet('cd-rsrq', rsrq !== null ? rsrq : '');
+  cellSet('cd-sinr', sinr !== null ? sinr : '');
+
+  const lu = $('cell-last-update'); if (lu) lu.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  // Score
+  const { score, alerts } = cellScore(d);
+
+  const scoreEl = $('cell-score-val');
+  const labelEl = $('cell-risk-label');
+  const fillEl  = $('cell-risk-fill');
+  const alertsEl = $('cell-alerts');
+
+  const pct = Math.min(100, Math.round(score / 21 * 100));
+  let color, label;
+  if (score >= 8) {
+    color = '#ff4444'; label = 'HIGH RISK';
+  } else if (score >= 4) {
+    color = '#ffaa00'; label = 'Suspicious';
+  } else {
+    color = '#00ff88'; label = 'Normal';
+  }
+
+  if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = color; }
+  if (labelEl) { labelEl.textContent = label; labelEl.style.color = color; }
+  if (fillEl)  { fillEl.style.width = pct + '%'; fillEl.style.background = color; }
+
+  if (alertsEl) {
+    if (alerts.length === 0) {
+      alertsEl.innerHTML = '<span class="dim" style="font-size:12px">No alerts.</span>';
+    } else {
+      alertsEl.innerHTML = alerts.map(a =>
+        '<span class="badge ' + (a.cls === 'err' ? 'block' : 'mark') + '">' + a.text + '</span>'
+      ).join(' ');
+    }
+  }
+
+  // Save for delta heuristics next poll
+  cellState.prev = {
+    tac:    d.cereg.tac,
+    ci:     d.cereg.ci,
+    plmn:   d.cops.plmn,
+    earfcn: d.cell.earfcn,
+    rat:    ratDisp.toUpperCase()
+  };
+}
+
+function loadCell() {
+  const errEl = $('cell-error'); if (errEl) errEl.style.display = 'none';
+  fetch('cgi-bin/cell.cgi')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { if (errEl) { errEl.textContent = 'Error: ' + j.error; errEl.style.display = ''; } return; }
+      cellRender(j.data);
+    })
+    .catch(e => { if (errEl) { errEl.textContent = 'Fetch error: ' + e.message; errEl.style.display = ''; } });
+}
+
+// Auto-poll every 30s when Cell tab is active
+setInterval(function() {
+  const sec = document.querySelector('#tab-cell');
+  if (sec && sec.classList.contains('active')) loadCell();
+}, 30000);
 
 function loadArp() {
   const tbody = $("arp-tbody");
