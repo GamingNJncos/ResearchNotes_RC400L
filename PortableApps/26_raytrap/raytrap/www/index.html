@@ -267,6 +267,7 @@ tr.nas-row-alert td{background:#200a0a}
   <button data-tab="usb">USB / Debug</button>
   <button data-tab="cell">&#x1F4F6; Cell Intel</button>
   <button data-tab="dns">DNS Monitor</button>
+  <button data-tab="probe">Probe Monitor</button>
   <button data-tab="cowbell" id="nav-cowbell" style="display:none">&#x1F404; COWBELL</button>
 </nav>
 
@@ -1266,6 +1267,48 @@ tr.nas-row-alert td{background:#200a0a}
 
 </section>
 
+<!-- ═══════════════════════ PROBE MONITOR ═══════════════════════ -->
+<section id="tab-probe" class="tab-content">
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4E1; 802.11 Probe Request Monitor</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="probe-dot" style="width:8px;height:8px;border-radius:50%;background:#333;display:inline-block"></span>
+        <span id="probe-status-text" class="dim" style="font-size:11px">Stopped</span>
+        <button class="btn sm success" id="probe-btn-start" onclick="probeStart()">&#9654; Start</button>
+        <button class="btn sm danger"  id="probe-btn-stop"  onclick="probeStop()" disabled>&#9646; Stop</button>
+        <button class="btn sm"         onclick="probeClear()">Clear</button>
+        <span class="dim" style="margin-left:8px;font-size:11px">Devices: <span id="probe-count">0</span></span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div id="probe-error" style="display:none;background:#1a0505;border-bottom:1px solid #5f1e1e;padding:10px 14px;font-size:12px;color:#ff6666"></div>
+      <div style="max-height:420px;overflow-y:auto">
+        <table>
+          <thead><tr><th>MAC Address</th><th>Probed SSIDs</th><th>Count</th><th>Last Seen</th></tr></thead>
+          <tbody id="probe-tbody">
+            <tr><td colspan="4" class="dim" style="text-align:center;padding:14px">Start capture to see probe requests (requires monitor mode on phy0)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>&#x2139; Notes</h3></div>
+    <div class="panel-body dim" style="font-size:11px;line-height:1.8">
+      Creates a <code>mon0</code> monitor interface on <code>phy0</code> alongside the active AP.<br>
+      Captures 802.11 probe request frames — reveals SSIDs devices have previously connected to.<br>
+      Devices with MAC randomization (iOS 14+, Android 10+, Windows 10+) use random MACs per scan.<br>
+      Monitor mode requires <code>NL80211_IFTYPE_MONITOR</code> in QCACLD driver supported types.<br>
+      If not supported, the start error will indicate this. No AP impact on success.<br>
+      Log stored at /tmp/raytrap_probes.txt. Grouped by device MAC.
+    </div>
+  </div>
+
+</section>
+
 <!-- ═══════════════════════ DNS MONITOR ═══════════════════════ -->
 <section id="tab-dns" class="tab-content">
 
@@ -1572,10 +1615,12 @@ const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wi
 function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
   if (typeof dnsOnTabLeave === 'function') dnsOnTabLeave(name);
+  if (typeof probeOnTabLeave === 'function') probeOnTabLeave(name);
   if (name === 'cowbell') { setTimeout(loadArp, 100); setTimeout(fbInfo, 200); }
   if (name === 'capture') { setTimeout(loadHandshakes, 100); }
   if (name === 'cell') { setTimeout(loadCell, 100); }
   if (name === 'dns') { dnsCheckStatus(); }
+  if (name === 'probe') { probeCheckStatus(); }
   if (name === 'system') { setTimeout(loadSystem, 100); setTimeout(loadClients, 200); }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   $('tab-'+name).classList.add('active');
@@ -3615,6 +3660,113 @@ function fbUpload() {
     .then(r => r.json())
     .then(j => { status.textContent = j.ok ? '✓ Uploaded (' + (j.data.bytes_written || '?') + ' bytes)' : 'Error: ' + j.error; })
     .catch(e => { status.textContent = 'Upload error: ' + e.message; });
+}
+
+// ─── Probe Monitor ─────────────────────────────────────────────────────────────────────────────────
+const probeState = { running: false, pollTimer: null };
+
+function probeSetStatus(running) {
+  probeState.running = running;
+  const dot = $('probe-dot'), txt = $('probe-status-text');
+  const startBtn = $('probe-btn-start'), stopBtn = $('probe-btn-stop');
+  if (dot) { dot.style.background = running ? '#00ff88' : '#555'; dot.style.boxShadow = running ? '0 0 6px #00ff88' : 'none'; }
+  if (txt) txt.textContent = running ? 'Running' : 'Stopped';
+  if (startBtn) startBtn.disabled = running;
+  if (stopBtn)  stopBtn.disabled  = !running;
+}
+
+function probeStart() {
+  const errEl = $('probe-error'); if (errEl) errEl.style.display = 'none';
+  fetch('cgi-bin/probe.cgi?action=start')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) {
+        if (errEl) { errEl.textContent = j.error; errEl.style.display = ''; }
+        return;
+      }
+      probeSetStatus(true);
+      probeStartPoll();
+    })
+    .catch(e => { if (errEl) { errEl.textContent = 'Fetch error: ' + e.message; errEl.style.display = ''; } });
+}
+
+function probeStop() {
+  clearInterval(probeState.pollTimer); probeState.pollTimer = null;
+  fetch('cgi-bin/probe.cgi?action=stop')
+    .then(r => r.json())
+    .then(() => probeSetStatus(false))
+    .catch(() => probeSetStatus(false));
+}
+
+function probeClear() {
+  const tbody = $('probe-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="dim" style="text-align:center;padding:14px">Cleared.</td></tr>';
+  const cnt = $('probe-count'); if (cnt) cnt.textContent = '0';
+  fetch('cgi-bin/probe.cgi?action=clear').catch(() => {});
+}
+
+function probeRender(devices) {
+  const tbody = $('probe-tbody');
+  if (!tbody) return;
+  if (!devices || !devices.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="dim" style="text-align:center;padding:14px">No probes captured yet…</td></tr>';
+    const cnt = $('probe-count'); if (cnt) cnt.textContent = '0';
+    return;
+  }
+  // Sort by count descending
+  devices.sort((a,b) => b.count - a.count);
+  tbody.innerHTML = devices.map(d => {
+    const t = d.last_ts ? new Date(d.last_ts * 1000).toLocaleTimeString() : '—';
+    const ssids = d.ssids.filter(s => s && s !== '<broadcast>');
+    const broadcast = d.ssids.includes('<broadcast>');
+    let ssidDisp = ssids.map(s => `<span class="badge tee" style="font-size:10px;margin:1px">${s}</span>`).join(' ');
+    if (broadcast) ssidDisp += ' <span class="dim" style="font-size:10px">[broadcast]</span>';
+    return `<tr>
+      <td><code>${d.mac}</code></td>
+      <td style="max-width:300px;word-break:break-all">${ssidDisp || '<span class="dim">[broadcast only]</span>'}</td>
+      <td>${d.count}</td>
+      <td style="font-size:11px">${t}</td>
+    </tr>`;
+  }).join('');
+  const cnt = $('probe-count'); if (cnt) cnt.textContent = devices.length;
+}
+
+function probePoll() {
+  fetch('cgi-bin/probe.cgi?action=poll')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) return;
+      probeSetStatus(j.data.running);
+      probeRender(j.data.devices);
+      if (!j.data.running) { clearInterval(probeState.pollTimer); probeState.pollTimer = null; }
+    })
+    .catch(() => {});
+}
+
+function probeStartPoll() {
+  clearInterval(probeState.pollTimer);
+  probeState.pollTimer = setInterval(probePoll, 5000);
+  probePoll();
+}
+
+function probeCheckStatus() {
+  fetch('cgi-bin/probe.cgi?action=status')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) return;
+      probeSetStatus(j.data.running);
+      if (j.data.running) probeStartPoll();
+    })
+    .catch(() => {});
+}
+
+function probeOnTabLeave(newTab) {
+  if (newTab !== 'probe' && probeState.pollTimer) {
+    clearInterval(probeState.pollTimer); probeState.pollTimer = null;
+  }
+  if (newTab === 'probe' && probeState.running && !probeState.pollTimer) {
+    probeStartPoll();
+  }
 }
 
 // ─── DNS Monitor ─────────────────────────────────────────────────────────────────────────────────
