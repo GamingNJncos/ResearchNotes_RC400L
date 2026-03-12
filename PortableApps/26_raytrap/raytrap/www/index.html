@@ -266,6 +266,7 @@ tr.nas-row-alert td{background:#200a0a}
   <button data-tab="at">AT Terminal</button>
   <button data-tab="usb">USB / Debug</button>
   <button data-tab="cell">&#x1F4F6; Cell Intel</button>
+  <button data-tab="dns">DNS Monitor</button>
   <button data-tab="cowbell" id="nav-cowbell" style="display:none">&#x1F404; COWBELL</button>
 </nav>
 
@@ -1265,6 +1266,50 @@ tr.nas-row-alert td{background:#200a0a}
 
 </section>
 
+<!-- ═══════════════════════ DNS MONITOR ═══════════════════════ -->
+<section id="tab-dns" class="tab-content">
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F310; DNS Query Monitor</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="dns-dot" style="width:8px;height:8px;border-radius:50%;background:#333;display:inline-block"></span>
+        <span id="dns-status-text" class="dim" style="font-size:11px">Stopped</span>
+        <select id="dns-iface" class="btn sm" style="padding:3px 6px;font-size:12px">
+          <option value="wlan0">wlan0</option>
+          <option value="bridge0">bridge0</option>
+          <option value="any">any</option>
+        </select>
+        <button class="btn sm success" id="dns-btn-start" onclick="dnsStart()">&#9654; Start</button>
+        <button class="btn sm danger"  id="dns-btn-stop"  onclick="dnsStop()" disabled>&#9646; Stop</button>
+        <button class="btn sm"         onclick="dnsClear()">Clear</button>
+        <span class="dim" style="margin-left:8px;font-size:11px">Queries: <span id="dns-count">0</span></span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div style="max-height:420px;overflow-y:auto">
+        <table>
+          <thead><tr><th>Time</th><th>Client IP</th><th>Type</th><th>Domain</th></tr></thead>
+          <tbody id="dns-tbody">
+            <tr><td colspan="4" class="dim" style="text-align:center;padding:14px">Start capture to see DNS queries</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr"><h3>&#x2139; Notes</h3></div>
+    <div class="panel-body dim" style="font-size:11px;line-height:1.8">
+      Captures UDP/TCP port 53 traffic on the selected interface via tcpdump.<br>
+      Queries shown are from WiFi clients to the device (192.168.1.1) DNS resolver.<br>
+      Log stored at /tmp/raytrap_dns.txt (cleared on Stop or Clear).<br>
+      Auto-polls every 3 seconds while capture is running.
+    </div>
+  </div>
+
+</section>
+
 <!-- ═════════════════════ CELL INTELLIGENCE ═════════════════════ -->
 <section id="tab-cell" class="tab-content">
 
@@ -1526,9 +1571,11 @@ const loaders = { dashboard:loadDash, firewall:loadFirewall, proxy:loadProxy, wi
 
 function switchTab(name){
   document.querySelectorAll('.tab-content').forEach(s=>s.classList.remove('active'));
+  if (typeof dnsOnTabLeave === 'function') dnsOnTabLeave(name);
   if (name === 'cowbell') { setTimeout(loadArp, 100); setTimeout(fbInfo, 200); }
   if (name === 'capture') { setTimeout(loadHandshakes, 100); }
   if (name === 'cell') { setTimeout(loadCell, 100); }
+  if (name === 'dns') { dnsCheckStatus(); }
   if (name === 'system') { setTimeout(loadSystem, 100); setTimeout(loadClients, 200); }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   $('tab-'+name).classList.add('active');
@@ -3568,6 +3615,109 @@ function fbUpload() {
     .then(r => r.json())
     .then(j => { status.textContent = j.ok ? '✓ Uploaded (' + (j.data.bytes_written || '?') + ' bytes)' : 'Error: ' + j.error; })
     .catch(e => { status.textContent = 'Upload error: ' + e.message; });
+}
+
+// ─── DNS Monitor ─────────────────────────────────────────────────────────────────────────────────
+const dnsState = { running: false, pollTimer: null, rows: [] };
+
+function dnsSetStatus(running) {
+  dnsState.running = running;
+  const dot = $('dns-dot'), txt = $('dns-status-text');
+  const startBtn = $('dns-btn-start'), stopBtn = $('dns-btn-stop');
+  if (dot) { dot.style.background = running ? '#00ff88' : '#555'; dot.style.boxShadow = running ? '0 0 6px #00ff88' : 'none'; }
+  if (txt) txt.textContent = running ? 'Running' : 'Stopped';
+  if (startBtn) startBtn.disabled = running;
+  if (stopBtn)  stopBtn.disabled  = !running;
+}
+
+function dnsStart() {
+  const iface = $('dns-iface') ? $('dns-iface').value : 'wlan0';
+  fetch('cgi-bin/dns.cgi?action=start&iface=' + iface)
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { toast('DNS start failed: ' + j.error); return; }
+      dnsSetStatus(true);
+      dnsStartPoll();
+    })
+    .catch(e => toast('DNS start error: ' + e.message));
+}
+
+function dnsStop() {
+  clearInterval(dnsState.pollTimer); dnsState.pollTimer = null;
+  fetch('cgi-bin/dns.cgi?action=stop')
+    .then(r => r.json())
+    .then(() => dnsSetStatus(false))
+    .catch(() => dnsSetStatus(false));
+}
+
+function dnsClear() {
+  dnsState.rows = [];
+  const tbody = $('dns-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="dim" style="text-align:center;padding:14px">Cleared.</td></tr>';
+  const cnt = $('dns-count'); if (cnt) cnt.textContent = '0';
+  fetch('cgi-bin/dns.cgi?action=clear').catch(() => {});
+}
+
+function dnsRenderRows(queries) {
+  if (!queries || !queries.length) return;
+  const tbody = $('dns-tbody');
+  if (!tbody) return;
+  // Merge new queries — use timestamp+src+domain as dedup key
+  const existing = new Set(dnsState.rows.map(r => r.ts + r.src + r.domain));
+  let added = 0;
+  for (const q of queries) {
+    const key = q.ts + q.src + q.domain;
+    if (!existing.has(key)) { dnsState.rows.push(q); existing.add(key); added++; }
+  }
+  if (!added) return;
+  // Keep last 500
+  if (dnsState.rows.length > 500) dnsState.rows = dnsState.rows.slice(-500);
+  // Re-render (newest first)
+  const toShow = dnsState.rows.slice().reverse();
+  tbody.innerHTML = toShow.map(q => {
+    const t = new Date(q.ts * 1000).toLocaleTimeString();
+    const tCls = q.qtype === 'AAAA' ? 'dim' : '';
+    return `<tr class="${tCls}"><td style="font-size:11px">${t}</td><td>${q.src}</td><td style="font-size:11px">${q.qtype||'?'}</td><td>${q.domain}</td></tr>`;
+  }).join('');
+  const cnt = $('dns-count'); if (cnt) cnt.textContent = dnsState.rows.length;
+}
+
+function dnsPoll() {
+  fetch('cgi-bin/dns.cgi?action=poll&count=200')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) return;
+      dnsSetStatus(j.data.running);
+      dnsRenderRows(j.data.queries);
+      if (!j.data.running) { clearInterval(dnsState.pollTimer); dnsState.pollTimer = null; }
+    })
+    .catch(() => {});
+}
+
+function dnsStartPoll() {
+  clearInterval(dnsState.pollTimer);
+  dnsState.pollTimer = setInterval(dnsPoll, 3000);
+  dnsPoll();
+}
+
+function dnsCheckStatus() {
+  fetch('cgi-bin/dns.cgi?action=status')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) return;
+      dnsSetStatus(j.data.running);
+      if (j.data.running) dnsStartPoll();
+    })
+    .catch(() => {});
+}
+
+function dnsOnTabLeave(newTab) {
+  if (newTab !== 'dns' && dnsState.pollTimer) {
+    clearInterval(dnsState.pollTimer); dnsState.pollTimer = null;
+  }
+  if (newTab === 'dns' && dnsState.running && !dnsState.pollTimer) {
+    dnsStartPoll();
+  }
 }
 
 // ─── System Tab ─────────────────────────────────────────────────────────────────────────────────
