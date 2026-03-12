@@ -262,6 +262,7 @@ tr.nas-row-alert td{background:#200a0a}
   <button data-tab="wifi">WiFi</button>
   <button data-tab="routing">Routing</button>
   <button data-tab="capture">Capture</button>
+  <button data-tab="system">System</button>
   <button data-tab="at">AT Terminal</button>
   <button data-tab="usb">USB / Debug</button>
   <button data-tab="cell">&#x1F4F6; Cell Intel</button>
@@ -1204,6 +1205,66 @@ tr.nas-row-alert td{background:#200a0a}
 
 </section>
 
+<!-- ════════════════════════ SYSTEM ════════════════════════ -->
+<section id="tab-system" class="tab-content">
+
+  <!-- Interface Statistics -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4CA; Interface Statistics</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="dim" id="sys-uptime" style="font-size:11px"></span>
+        <button class="btn sm" onclick="loadSystem()">&#8635; Refresh</button>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr><th>Interface</th><th>State</th><th>RX Bytes</th><th>TX Bytes</th><th>RX Pkts</th><th>TX Pkts</th></tr></thead>
+        <tbody id="sys-iface-tbody">
+          <tr><td colspan="6" class="dim" style="text-align:center;padding:12px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Signal History Sparkline -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4F6; RSRP Signal History</h3>
+      <span class="dim" style="font-size:11px">AT+CESQ — sampled on refresh (last 20 polls)</span>
+    </div>
+    <div class="panel-body">
+      <div id="sys-rsrp-current" class="dim" style="font-size:12px;margin-bottom:8px">RSRP: —</div>
+      <svg id="sys-sparkline" viewBox="0 0 400 60" style="width:100%;max-width:600px;height:60px;display:block;background:#050e18;border:1px solid #0d2035;border-radius:3px">
+        <text x="200" y="34" text-anchor="middle" fill="#1e3a5f" font-size="10" font-family="monospace">No data yet</text>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#3a6080;margin-top:2px;max-width:600px">
+        <span>oldest</span><span>← time →</span><span>newest</span>
+      </div>
+      <div style="font-size:10px;color:#3a6080;margin-top:4px">
+        RSRP range: -140 dBm (weak) – -44 dBm (strong) · 255 = unmeasured
+      </div>
+    </div>
+  </div>
+
+  <!-- Connected Clients -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <h3>&#x1F4BB; Connected Clients</h3>
+      <button class="btn sm" onclick="loadClients()">&#8635; Refresh</button>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr><th>IP Address</th><th>MAC</th><th>Hostname</th><th>Interface</th><th>Flags</th></tr></thead>
+        <tbody id="sys-clients-tbody">
+          <tr><td colspan="5" class="dim" style="text-align:center;padding:12px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
 <!-- ═════════════════════ CELL INTELLIGENCE ═════════════════════ -->
 <section id="tab-cell" class="tab-content">
 
@@ -1468,6 +1529,7 @@ function switchTab(name){
   if (name === 'cowbell') { setTimeout(loadArp, 100); setTimeout(fbInfo, 200); }
   if (name === 'capture') { setTimeout(loadHandshakes, 100); }
   if (name === 'cell') { setTimeout(loadCell, 100); }
+  if (name === 'system') { setTimeout(loadSystem, 100); setTimeout(loadClients, 200); }
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   $('tab-'+name).classList.add('active');
   document.querySelector('[data-tab="'+name+'"]').classList.add('active');
@@ -3507,6 +3569,144 @@ function fbUpload() {
     .then(j => { status.textContent = j.ok ? '✓ Uploaded (' + (j.data.bytes_written || '?') + ' bytes)' : 'Error: ' + j.error; })
     .catch(e => { status.textContent = 'Upload error: ' + e.message; });
 }
+
+// ─── System Tab ─────────────────────────────────────────────────────────────────────────────────
+function fmtBytes(b) {
+  if (b === null || b === undefined) return '—';
+  b = Number(b);
+  if (b >= 1073741824) return (b/1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576)    return (b/1048576).toFixed(1) + ' MB';
+  if (b >= 1024)       return (b/1024).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+function fmtUptime(s) {
+  if (!s && s !== 0) return '';
+  s = Math.floor(s);
+  const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600),
+        m = Math.floor((s%3600)/60), sec = s%60;
+  if (d > 0) return 'Up ' + d + 'd ' + h + 'h';
+  if (h > 0) return 'Up ' + h + 'h ' + m + 'm';
+  return 'Up ' + m + 'm ' + sec + 's';
+}
+
+function drawSparkline(history) {
+  const svg = document.getElementById('sys-sparkline');
+  if (!svg) return;
+  if (!history || !history.length) {
+    svg.innerHTML = '<text x="200" y="34" text-anchor="middle" fill="#1e3a5f" font-size="10" font-family="monospace">No data</text>';
+    return;
+  }
+  const W = 400, H = 60, PAD = 6;
+  // RSRP range: -140 to -44 dBm
+  const MIN_R = -140, MAX_R = -44;
+  const pts = history.map((e, i) => {
+    const x = PAD + (i / Math.max(history.length - 1, 1)) * (W - PAD*2);
+    const r = Math.max(MIN_R, Math.min(MAX_R, e.rsrp));
+    const y = PAD + (1 - (r - MIN_R) / (MAX_R - MIN_R)) * (H - PAD*2);
+    return [x, y, e.rsrp];
+  });
+  // Grid lines at -65, -85, -105
+  let grid = '';
+  for (const r of [-65, -85, -105]) {
+    const y = PAD + (1 - (r - MIN_R) / (MAX_R - MIN_R)) * (H - PAD*2);
+    const col = r === -65 ? '#3a1e1e' : '#0d2035';
+    grid += `<line x1="${PAD}" y1="${y.toFixed(1)}" x2="${W-PAD}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="0.5"/>`;
+    grid += `<text x="${W-PAD+2}" y="${(y+3).toFixed(1)}" fill="#2a4060" font-size="7" font-family="monospace">${r}</text>`;
+  }
+  // Polyline
+  const polyline = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  // Dots
+  let dots = '';
+  for (const [x, y, r] of pts) {
+    const col = r > -65 ? '#ff4444' : r > -85 ? '#00ff88' : r > -100 ? '#ffaa00' : '#ff4444';
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${col}"/>`;
+  }
+  // Current RSRP label
+  const last = pts[pts.length-1];
+  const lastR = history[history.length-1].rsrp;
+  const lcol = lastR > -65 ? '#ff4444' : lastR > -85 ? '#00ff88' : lastR > -100 ? '#ffaa00' : '#ff4444';
+  svg.innerHTML = grid +
+    `<polyline points="${polyline}" fill="none" stroke="#1e4a8a" stroke-width="1.5"/>` +
+    dots +
+    `<text x="${last[0].toFixed(1)}" y="${Math.max(12, last[1]-3).toFixed(1)}" fill="${lcol}" font-size="8" font-family="monospace">${lastR}</text>`;
+}
+
+function loadSystem() {
+  fetch('cgi-bin/system.cgi')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) return;
+      const d = j.data;
+      // Uptime
+      const ut = $('sys-uptime'); if (ut) ut.textContent = fmtUptime(d.uptime_sec);
+      // Interface table
+      const tbody = $('sys-iface-tbody');
+      if (tbody) {
+        if (!d.ifaces || !d.ifaces.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="dim" style="text-align:center;padding:12px">No interfaces found.</td></tr>';
+        } else {
+          const ORDER = ['rmnet0','bridge0','wlan0','wlan1','usb0'];
+          const sorted = d.ifaces.slice().sort((a,b) => {
+            const ai = ORDER.indexOf(a.name), bi = ORDER.indexOf(b.name);
+            return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+          });
+          tbody.innerHTML = sorted.map(iface => {
+            const cls = iface.state === 'up' ? 'ok' : 'err';
+            return `<tr>
+              <td><code>${iface.name}</code></td>
+              <td><span class="${cls}">${iface.state}</span></td>
+              <td>${fmtBytes(iface.rx_bytes)}</td>
+              <td>${fmtBytes(iface.tx_bytes)}</td>
+              <td>${Number(iface.rx_pkts).toLocaleString()}</td>
+              <td>${Number(iface.tx_pkts).toLocaleString()}</td>
+            </tr>`;
+          }).join('');
+        }
+      }
+      // Signal
+      const rsrpEl = $('sys-rsrp-current');
+      if (rsrpEl) {
+        if (d.rsrp !== null && d.rsrp !== undefined) {
+          const col = d.rsrp > -65 ? '#ff4444' : d.rsrp > -85 ? '#00ff88' : d.rsrp > -100 ? '#ffaa00' : '#ff4444';
+          rsrpEl.innerHTML = 'RSRP: <span style="color:' + col + ';font-weight:bold">' + d.rsrp + ' dBm</span>';
+        } else {
+          rsrpEl.textContent = 'RSRP: not available (no smd7 or modem not registered)';
+        }
+      }
+      drawSparkline(d.signal_history);
+    })
+    .catch(() => {});
+}
+
+// ─── Client Tracker ───────────────────────────────────────────────────────────
+function loadClients() {
+  const tbody = $('sys-clients-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="dim" style="text-align:center;padding:12px">Loading…</td></tr>';
+  fetch('cgi-bin/clients.cgi')
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok || !j.data || !j.data.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="dim" style="text-align:center;padding:12px">No clients found (ARP table empty).</td></tr>';
+        return;
+      }
+      tbody.innerHTML = j.data.map(c => `<tr>
+        <td>${c.ip}</td>
+        <td><code>${c.mac}</code></td>
+        <td>${c.hostname || '<span class="dim">—</span>'}</td>
+        <td>${c.iface}</td>
+        <td><span class="dim" style="font-size:11px">${c.flags}</span></td>
+      </tr>`).join('');
+    })
+    .catch(() => { tbody.innerHTML = '<tr><td colspan="5" class="err">Error loading clients.</td></tr>'; });
+}
+
+// Auto-poll system tab every 30s
+setInterval(function() {
+  const sec = document.querySelector('#tab-system');
+  if (sec && sec.classList.contains('active')) { loadSystem(); loadClients(); }
+}, 30000);
 
 // ─── Cell Intelligence ─────────────────────────────────────────────────────────────────────────────────
 const cellState = {
