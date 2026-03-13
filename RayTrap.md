@@ -1,10 +1,10 @@
 # RayTrap — Unified Web Control Interface
 
-**Transparent WiFi MITM** · **Passive traffic mirroring** · **DNS hijacking** · **TLS intercept path** · **Full packet capture** · **Direct AT modem interface** · **GPS control** · **Cellular band/PCI/EARFCN locking** · **LTE DIAG stream (RRC · NAS · L1–PDCP)** · **IMSI-catcher detection** · **Concurrent AP+STA dual uplink** · **Per-client LTE/WiFi policy routing** · **USB composition switching** · **20 USB modes** · **Boot-persistent, browser-accessible, $30**
+**Transparent WiFi MITM** · **Passive traffic mirroring** · **DNS hijacking** · **TLS intercept path** · **Full packet capture** · **LTE DIAG stream (RRC · NAS · L1–PDCP)** · **IMSI-catcher detection** · **Concurrent AP+STA dual uplink** · **Per-client LTE/WiFi policy routing** · **USB composition switching** · **Boot-persistent, browser-accessible, $30**
 
 ---
 
-RayTrap is a browser-based control interface for the Orbic RC400L, turning a $30 LTE hotspot into a pocket-sized network research platform. Nine tabs expose every capability of the device over an ADB tunnel — no rootshell, no terminal, no external hardware beyond a USB cable.
+RayTrap is a browser-based control interface for the Orbic RC400L, turning a $30 LTE hotspot into a pocket-sized network research platform. Thirteen tabs expose every capability of the device over an ADB tunnel — no rootshell, no terminal, no external hardware beyond a USB cable.
 
 Developed as part of the [RC400L research project](README.md). All underlying capabilities are documented step-by-step in the main README.
 
@@ -13,7 +13,7 @@ Developed as part of the [RC400L research project](README.md). All underlying ca
 <!-- screenshots-updated: 2026-03-11 -->
 <!-- AUTO-UPDATED: .github/workflows/screenshots.yml regenerates raytrap_demo.gif on every push touching www/ -->
 
-![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture · USB · AT Terminal · DIAG](assets/raytrap_demo.gif)
+![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture · System · AT Terminal · USB · Cell Intel · DNS Monitor · Probe Monitor · Captive Portal](assets/raytrap_demo.gif)
 
 ---
 
@@ -27,13 +27,10 @@ A $30 device, fully unlocked, running a boot-persistent web UI with:
 | Passive traffic duplication to Wireshark | iptables TEE — zero client footprint |
 | Full packet capture on every interface | tcpdump with escaped capability jail |
 | Intercept and log all HTTP requests | Proxy tab — inline log tail |
-| DNS hijacking | iptables DNAT + optional local resolver |
+| DNS hijacking | iptables DNAT |
 | TLS intercept path (TPROXY) | Kernel-level TPROXY rule with mitmproxy/sslsplit support |
 | Concurrent WiFi AP + STA (bridge repeater) | wpa_supplicant on wlan1 alongside wlan0 AP |
 | Per-client dual uplink (LTE or WiFi) | Policy routing tables 100/200 with MARK rules |
-| Direct AT command modem interface | /dev/smd7 shell with 322+ commands |
-| Cellular band, PCI, and EARFCN locking | AT^BANDLOCK / ^PCILOCK / ^EARFCNLOCK |
-| GPS start/stop/fix | AT+FGGPSSTART / FGGGPSNMEA |
 | Raw LTE protocol capture (RRC, NAS, L1–PDCP) | Rayhunter fork DIAG stream |
 | IMSI-catcher heuristics | Rayhunter fork analyzers |
 | USB composition switching (20 modes) | Sysfs gadget rewrite + DIAG serial toggle |
@@ -67,16 +64,23 @@ adb shell rm -rf /data/tmp/raytrap
 ```
 
 The deploy script:
-1. Verifies busybox httpd is available and the package is complete
+1. Preflight: verifies root access, package completeness, and busybox httpd availability
 2. Stops any existing httpd on port 8888
 3. Installs `tinyproxy`, `tcpdump`, `libpcap.so.1` to `/cache/bin/` and `/cache/lib/`
-4. Creates `/cache/raytrap/www/cgi-bin/` and `/cache/raytrap/captures/`
-5. Installs all CGI scripts (chmod 755) and `index.html`
-6. Patches `/etc/init.d/misc-daemon` to launch RayTrap at boot (after modem ONLINE)
-7. Injects a `once` inittab entry, signals PID 1, waits for port 8888
-8. Removes the `once` entry
+4. Deploys the iptables daemon (`ipt_daemon.sh`, `ipt_ctl.sh`, `ipt_rules.sh`) to `/cache/ipt/` with inittab respawn entry, waits for FIFO
+5. Rayhunter detection: probes existing binary for compatibility; installs bundled v0.10.2 (musl static armv7), replaces a crashing glibc build, or keeps an existing functional binary
+6. Starts rayhunter via ipt daemon (required for `CAP_SYS_ADMIN`); creates default `config.toml` and installs `rayhunter_daemon` init script if missing
+7. Verifies rayhunter startup via log inspection
+8. Creates `/cache/raytrap/www/cgi-bin/` and `/cache/raytrap/captures/`
+9. Installs all CGI scripts (chmod 755), `index.html`, `captive.html`, and `start.sh`
+10. Installs `/etc/init.d/raytrap_daemon`
+11. Patches `/etc/init.d/misc-daemon` to launch RayTrap at boot after modem ONLINE
+12. Launches busybox httpd via inittab `once` entry, signals PID 1, waits for port 8888
+13. Verifies port 8888 is listening
+14. Removes temporary inittab entry
+15. Final service verification: confirms httpd, ipt daemon, and rayhunter are all running
 
-**Boot persistence**: RayTrap starts automatically on every subsequent reboot. The iptables daemon, rayhunter fork, and wpa_supplicant all survive reboots via the same mechanism.
+**Boot persistence**: RayTrap starts automatically on every subsequent reboot. The iptables daemon and rayhunter fork survive reboots via the same mechanism.
 
 ---
 
@@ -110,13 +114,11 @@ adb forward tcp:8889 tcp:8888
 
 Live status poll every 15 seconds. Shows 🟢/🔴 indicators for:
 - iptables daemon (`/cache/ipt/cmd.fifo` + `CapEff` capability check)
-- tinyproxy (PID + port 8118 listening state)
+- tinyproxy (PID)
 - wpa_supplicant on `wlan1` (connection state, SSID, IP)
 - Active tcpdump capture (PID, interface, elapsed time)
 
 System panel: uptime, `/cache` and `/data` free space, kernel version.
-
-**DIAG Owner panel**: toggle `/dev/diag` between rayhunter (capture mode) and external tools (QCSuper / custom parsers). Includes LTE Stop/Start controls and live QCMAP status badge. Stopping LTE tears down the data session and terminates the carrier connection — useful before switching DIAG owners to avoid conflicts.
 
 ---
 
@@ -141,7 +143,7 @@ Active rules table shows all entries in `ORBIC_*` chains with type badges and pe
 ### Proxy
 
 tinyproxy lifecycle control:
-- **Start / Stop** — launches via inittab escape (full `CAP_NET_BIND_SERVICE` required)
+- **Start / Stop** — launches via inittab escape
 - **Transparent HTTP** toggle — adds/removes the port 80 REDIRECT rule automatically
 - **Config editor** — inline edit: port, log level, allow subnet, max clients, timeout
 - **Log tail** — live last-30-lines of tinyproxy access log showing every proxied request
@@ -246,7 +248,7 @@ Interface options:
 
 USB composition switching and DIAG debug control:
 
-- Lists all 20 available USB compositions with their function strings (diag, serial, adb, rmnet, rndis, ecm, mbim)
+- Lists all available USB compositions with their function strings (diag, serial, adb, rmnet, rndis, ecm, mbim)
 - Live read of current active composition from sysfs
 - **Set Mode** — writes to `/sys/class/android_usb/android0/` sysfs and persists to `/usrdata/mode.cfg`
 - **DIAG Debug toggle** — enables/disables the Qualcomm USB DIAG serial interface without a full mode switch
@@ -257,39 +259,10 @@ Notable compositions:
 |---|---|---|
 | 1 (f601) | diag + serial + adb + rmnet | Standard development mode |
 | 9 (f622) | rndis + diag + serial + adb | Windows RNDIS + DIAG — QCSuper compatible |
-| 19 (9085) | mbim | Windows-native MBIM modem, no driver needed |
+| 19 (9085) | diag + adb + usb_mbim + gps | Windows-native MBIM modem, no driver needed |
 | 20 (9025) | diag + serial + rmnet + adb | AT command access via serial |
 
 Switching USB composition live avoids a reboot in most cases. Enabling RNDIS in the same composition as DIAG is the key configuration for running QCSuper while maintaining ADB access.
-
----
-
-### AT Terminal
-
-Direct interface to the modem over `/dev/smd7`. Bypasses atfwd_daemon and communicates with the baseband directly.
-
-Twelve action types:
-
-| Action | Description |
-|---|---|
-| `check` | Verify `/dev/smd7` availability and exclusivity |
-| `send` | Send an arbitrary AT command (with safety tier enforcement) |
-| `cell_intel` | Serving cell info: MCC/MNC/CI/TAC/RSRP/RSRQ/band |
-| `scan` | Network operator scan (requires modem idle) |
-| `cell_lock_read` | Read current band, PCI, and EARFCN locks |
-| `cell_lock_write` | Write band/PCI/EARFCN lock configuration |
-| `cell_unlock_all` | Remove all cellular locks |
-| `radio_read` | Read radio state: CFUN mode, PDP context |
-| `radio_write` | Set CFUN power mode (0/5/6/7), write CGDCONT |
-| `gps_start` | Start the GPS daemon |
-| `gps_stop` | Stop the GPS daemon |
-| `gps_fix` | Read current GPS fix (lat/lon/alt/accuracy) |
-
-**Safety tiers** protect against bricking actions. Commands in the BLOCKED tier (`AT+POWEROFF`, `AT+RESET`, `AT+SYSCMD`, `AT+MEIGEDL`, `AT$QCPWRDN`) are rejected entirely. Commands in the WARN tier (`PCILOCK`, `EARFCNLOCK`, `BANDLOCK`, `CFUN`, `WIFIPSK`) prompt confirmation before executing.
-
-The full command namespace includes 322 registered AT commands (`AT$QCCLAC`) across four namespaces — standard 3GPP (`AT+`), Qualcomm proprietary (`AT$`), Huawei-style caret (`AT^`), and 44 vendor-custom commands registered via atfwd_daemon. See [SideQuests/AT_Command_DeepDive.md](SideQuests/AT_Command_DeepDive.md) for the full inventory.
-
-**Locking the modem to a specific cell** (`cell_lock_write`) forces the device to camp on a single eNB/PCI/EARFCN. Useful for: verifying a suspected rogue tower is consistently serving you, measuring signal from a specific cell while eliminating neighbor handoffs, or confirming carrier band routing in a multi-carrier test environment.
 
 ---
 
@@ -316,12 +289,15 @@ Rayhunter fork log mask and streaming control:
 | `gsm` | 0x512F/5226 | GSM BCCH/RR/MM/GMM (active only on 2G fallback) |
 | `umts_nas` | 0x713A | 3G NAS: GMM/SM PDP context |
 | `ip_data` | 0x11EB | Data call setup/teardown, PDN bearer |
+| `nr_rrc` | 0xB821 | NR (5G NSA) RRC messages |
+| `f3_debug` | (all F3) | Modem internal F3 trace messages |
+| `qmi_events` | (QMI) | QMI service transactions and modem state events |
 
 **Rayhunter fork additions** (see [SideQuests/Rayhunter_Fork.md](SideQuests/Rayhunter_Fork.md)):
 - Boot mask: the fork applies the saved `[log_mask]` from `config.toml` at every startup regardless of `debug_mode`, ensuring the modem retains the selected logging configuration even when `/dev/diag` is handed off to external tools
 - Stream API: `GET /api/stream` returns a chunked octet-stream of raw DIAG frames for piping to custom parsers
 
-**Active analyzers** (rayhunter 0.8.0 + fork):
+**Active analyzers** (rayhunter v0.10.2 + fork):
 - IMSI/IMEI identity requested outside of normal attach flow
 - Connection release with 2G redirect (forced downgrade)
 - SIB 6/7 broadcast (2G/3G priority elevation)
@@ -401,11 +377,7 @@ Deploy a TLS MITM proxy (mitmproxy, sslsplit, bettercap) on port 8443 via the in
 Lock the modem to a specific cell to study it in isolation, or force a downgrade to characterize 2G/3G fallback behavior.
 
 ```
-AT Terminal tab → cell_intel      — serving cell: MCC/MNC/eNB/CI/TAC/RSRP/RSRQ/SINR/band
-AT Terminal tab → scan            — all visible carriers and their signal levels
-AT Terminal tab → cell_lock_write → PCI + EARFCN  — pin to a specific cell
-AT Terminal tab → radio_write → CFUN=0            — power down radio
-AT Terminal tab → radio_write → CFUN=1            — bring radio back up, forced re-attach
+Cell Intel tab → view serving cell: MCC/MNC/eNB/CI/TAC/RSRP/RSRQ/SINR/band
 ```
 
 Locking to a specific PCI/EARFCN and watching the DIAG stream (`lte_rrc` + `lte_nas` categories) shows the full attach and authentication exchange for that cell. If the cell requests IMSI instead of TMSI, or negotiates EEA0, rayhunter's analyzers flag it.
@@ -442,7 +414,7 @@ PATH="$PATH:..." venv/Scripts/python qcsuper.py \
   --usb-modem COM15 --pcap-dump capture.pcap --decrypt-nas
 ```
 
-Set the DIAG Owner to "External" in the Dashboard before connecting — this ensures the rayhunter fork releases `/dev/diag` after applying the saved log mask, avoiding a conflict. The boot mask feature means QCSuper inherits a pre-configured log mask without needing to set it itself.
+Set the DIAG Owner to "External" in the DIAG Control tab before connecting — this ensures the rayhunter fork releases `/dev/diag` after applying the saved log mask, avoiding a conflict. The boot mask feature means QCSuper inherits a pre-configured log mask without needing to set it itself.
 
 NAS capture (`lte_nas` category) requires an active SIM with network registration. The modem must be attached to a cell for NAS messages to be exchanged. RRC and L1 captures (SIBs, signal measurements, neighbor lists) work without a SIM — the modem scans and receives broadcast data regardless of SIM state.
 
@@ -479,7 +451,7 @@ curl -s http://127.0.0.1:18080/api/stream | hexdump -C | head -50
 curl -s http://127.0.0.1:18080/api/stream > diag_capture.bin
 ```
 
-Rayhunter must be the DIAG owner (Dashboard → "Set rayhunter as owner") for the stream to contain data.
+Rayhunter must be the DIAG owner (DIAG Control tab → "Set rayhunter as owner") for the stream to contain data.
 
 ---
 
@@ -592,7 +564,6 @@ All source in `PortableApps/26_raytrap/`:
 | `raytrap/www/cgi-bin/routing.cgi` | ip rule + policy routing tables |
 | `raytrap/www/cgi-bin/capture.cgi` | tcpdump start/stop + PCAP download |
 | `raytrap/www/cgi-bin/usb.cgi` | USB composition switch + DIAG debug toggle |
-| `raytrap/www/cgi-bin/at.cgi` | /dev/smd7 AT terminal, GPS, cell lock, radio |
 | `raytrap/www/cgi-bin/diag.cgi` | DIAG owner toggle, log mask, LTE control |
 
 The Rayhunter fork patch (`PortableApps/26_raytrap/rayhunter_fork/daemon/src/main.rs`) seeds the DIAG log mask at every startup — documented in [SideQuests/Rayhunter_Fork.md](SideQuests/Rayhunter_Fork.md).
@@ -621,14 +592,10 @@ Verify REDIRECT rule is active (Firewall tab → active rules table). Verify tin
 
 wpa_supplicant is deployed as part of `PortableApps/01_xtables/`. Check `ps | grep wpa_supplicant` from rootshell.
 
-**AT Terminal shows /dev/smd7 busy**
-
-Another process has the AT channel open. On MDM9607, `/dev/smd7` is exclusive — only one fd can hold it at a time. Check `lsof /dev/smd7` or reboot if the fd is stuck.
-
 **PCAP download returns empty file**
 
 Verify tcpdump has write access to `/cache/raytrap/captures/`. Run `ls -la /cache/raytrap/captures/` from rootshell.
 
 **DIAG stream empty in QCSuper**
 
-Ensure DIAG Owner is set to "External" on the Dashboard. Verify the USB composition includes the DIAG function (mode 9 or mode 1). Check QCSuper's COM port matches the Qualcomm HS-USB Diagnostics device in Device Manager.
+Ensure DIAG Owner is set to "External" on the DIAG Control tab. Verify the USB composition includes the DIAG function (mode 9 or mode 1). Check QCSuper's COM port matches the Qualcomm HS-USB Diagnostics device in Device Manager.
