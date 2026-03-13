@@ -10,7 +10,7 @@ Developed as part of the [RC400L research project](README.md). All underlying ca
 
 ---
 
-<!-- screenshots-updated: 2026-03-11 -->
+<!-- screenshots-updated: 2026-03-13 -->
 <!-- AUTO-UPDATED: .github/workflows/screenshots.yml regenerates raytrap_demo.gif on every push touching www/ -->
 
 ![RayTrap UI — Dashboard · Firewall · Proxy · WiFi · Routing · Capture · System · AT Terminal · USB · Cell Intel · DNS Monitor · Probe Monitor · Captive Portal](assets/raytrap_demo.gif)
